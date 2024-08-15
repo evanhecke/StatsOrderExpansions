@@ -63,14 +63,32 @@ def initialize_distributions(claims_distribution_name, claims_params, severity_d
 
     return N, X, exp_X, a, b
 
-def first_Order_Approximation(amount, severity, s_values):
+def frechet_pdf(y, alpha, beta, min_val):
+    """Custom PDF for the Frechet distribution."""
+    return (alpha / beta) * ((y - min_val) / beta) ** (-1 - alpha) * exp(-((y - min_val) / beta) ** (-alpha))
+
+def frechet_cdf(y, alpha, beta, min_val):
+    """Custom CDF for the Frechet distribution."""
+    return exp(-((y - min_val) / beta) ** (-alpha))
+
+def weibull_cdf(s, lambda_, k):
+    """Custom CDF calculation for the Weibull distribution."""
+    return 1 - exp(-(s/lambda_)**k)
+
+def first_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values):
     results = []
     for s in s_values:
-        tailX = (1 - cdf(severity)(s)).evalf()
+        if severity_distribution_name == 'Weibull':
+            lambda_, k = severity_params
+            tailX = 1 - weibull_cdf(s, lambda_, k)
+        elif severity_distribution_name == 'Frechet':
+            alpha, beta, min_val = severity_params
+            tailX = 1 - frechet_cdf(s, alpha, beta, min_val)
+        else:
+            tailX = (1 - cdf(severity)(s)).evalf()
         result = E(amount) * tailX
         results.append(result)
     return results
-
 
 def second_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
     # Create empty array for the computed second order approximation values
@@ -78,7 +96,7 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
     sum_results2 = []
 
     # Create symbol to be used in density functions of sympy package
-    y = symbols('y')
+    y = symbols('y', positive=True, finite=True)
 
     # Calculate the expected value term of combinator found in all second order equations
     exp_comb = E(amount * (amount - 1))
@@ -87,11 +105,14 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
     if severity_distribution_name in ["Pareto", "Frechet"]:
         # Pareto and Frechet have a distinct asymptotic approximation
         alpha = severity_params[0]
+
         if severity_distribution_name == "Pareto":
             min = severity_params[1]
         else:
             min = severity_params[2]
-        if alpha == 1:
+
+        # 2 Approximation cases, depending on the value of alpha
+        if alpha == float(1):
             for s in s_values:
                 integr_s = integrate(1 - cdf(severity)(y), (y, min, s))
                 eval_s = (density(severity)(s)).evalf()
@@ -111,7 +132,7 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
                 results2.append(2 * exp_comb * exp_X * eval_s)
             sum_results2 = [x + y for x, y in zip(results1, results2)]
     else:
-        #placeholder for second order calculation for other cases of frechet and pareto
+        # placeholder for second order calculation for other cases of frechet and pareto
         # The asymptotic approximation is valid for Lognormal distribution and heavy-tailed Weibull distribution
         for s in s_values:
             eval_s = density(severity)(s).evalf()
@@ -147,12 +168,10 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     N, X, exp_X, a, b = initialize_distributions(claims_distribution_name, claims_params, severity_distribution_name,
                                     severity_params)
     print("Claim amount distribution:", cdf(N))
-    print("Severity distribution:", cdf(X))
+    #print("Severity distribution:", cdf(X))
 
     # Evaluate first-order approximation
-    results1 = first_Order_Approximation(N, X, s_values)
-
-    # conditions.conditions_second_order_approximation(X)
+    results1 = first_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values)
 
     # Evaluate second-order approximation
     results2 = second_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
