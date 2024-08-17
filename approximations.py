@@ -116,73 +116,65 @@ def lognormal_cdf(s, mu, sigma):
 
 
 def first_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values):
-    results1 = []
-    for s in s_values:
-        if severity_distribution_name == 'Weibull':
-            lambda_, k = severity_params
-            tailX = 1 - weibull_cdf(s, lambda_, k)
-        elif severity_distribution_name == 'Frechet':
-            alpha, beta, min_val = severity_params
-            tailX = 1 - frechet_cdf(s, alpha, beta, min_val)
-        elif severity_distribution_name == 'Pareto':
-            alpha, xm = severity_params
-            tailX = 1 - pareto_cdf(s, alpha, xm)
-        elif severity_distribution_name == 'Lognormal':
-            mu, sigma = severity_params
-            tailX = 1 - lognormal_cdf(s, mu, sigma)
+    if severity_distribution_name == 'Weibull':
+        lambda_, k = severity_params
+        tailX = 1 - weibull_cdf(s_values, lambda_, k)
+    elif severity_distribution_name == 'Frechet':
+        alpha, beta, min_val = severity_params
+        tailX = 1 - frechet_cdf(s_values, alpha, beta, min_val)
+    elif severity_distribution_name == 'Pareto':
+        alpha, xm = severity_params
+        tailX = 1 - pareto_cdf(s_values, alpha, xm)
+    elif severity_distribution_name == 'Lognormal':
+        mu, sigma = severity_params
+        tailX = 1 - lognormal_cdf(s_values, mu, sigma)
+    else:
+        raise ValueError("Invalid severity distribution name")
 
-        result = E(amount).evalf() * tailX # Ensure result is a real number
-        if np.iscomplex(result):
-            result = result.real  # Take the real part if there's a small imaginary part
-        results1.append(result)
+    results1 = E(amount).evalf() * tailX
+    results1 = np.where(np.iscomplex(results1), results1.real, results1)
 
     return results1
 
 
-def second_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1,
-                               exp_X):
-    results2 = []
-
-    # Calculate the expected value term of the combinator
+def second_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
     exp_comb = E(amount * (amount - 1)).evalf()
 
-    for s in s_values:
-        if severity_distribution_name == "Frechet":
-            alpha, beta, min_val = severity_params
-            eval_s = frechet_pdf(s, alpha, beta, min_val)
-            if alpha == 1:
-                integr_s, _ = quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)
-                results2.append(2 * exp_comb * eval_s * integr_s)
-            elif 0 < alpha < 1:
-                integr_s, _ = quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)
-                expr = - (2 - alpha) * gamma(2 - alpha) / ((alpha - 1) * gamma(3 - 2 * alpha))
-                results2.append(exp_comb * expr * eval_s * integr_s)
-            else:
-                results2.append(2 * exp_comb * exp_X * eval_s)
-        elif severity_distribution_name == "Pareto":
-            alpha, xm = severity_params
-            integr_s, _ = quad(lambda y: 1 - pareto_cdf(y, alpha, xm), s_values[0], s)
-            eval_s = pareto_pdf(s, alpha, xm)
-            if alpha == 1:
-                results2.append(2 * exp_comb * eval_s * integr_s)
-            elif 0 < alpha < 1:
-                expr = - (2 - alpha) * gamma(2 - alpha) / ((alpha - 1) * gamma(3 - 2 * alpha))
-                results2.append(exp_comb * expr * eval_s * integr_s)
-            else:
-                results2.append(2 * exp_comb * exp_X * eval_s)
-        elif severity_distribution_name == "Lognormal":
-            mu, sigma = severity_params
-            integr_s, _ = quad(lambda y: 1 - lognormal_cdf(y, mu, sigma), s_values[0], s)
-            eval_s = lognormal_pdf(s, mu, sigma)
-            results2.append(2 * exp_comb * exp_X * eval_s)
-        else:  # Weibull Case
-            lambda_, k = severity_params
-            eval_s = weibull_pdf(s, lambda_, k)
-            results2.append(2 * exp_comb * exp_X * eval_s)
+    if severity_distribution_name == "Frechet":
+        alpha, beta, min_val = severity_params
+        eval_s = frechet_pdf(s_values, alpha, beta, min_val)
+        if alpha == 1:
+            integr_s = np.array([quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)[0] for s in s_values])
+            results2 = 2 * exp_comb * eval_s * integr_s
+        elif 0 < alpha < 1:
+            integr_s = np.array([quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)[0] for s in s_values])
+            expr = - (2 - alpha) * gamma(2 - alpha) / ((alpha - 1) * gamma(3 - 2 * alpha))
+            results2 = exp_comb * expr * eval_s * integr_s
+        else:
+            results2 = 2 * exp_comb * exp_X * eval_s
+    elif severity_distribution_name == "Pareto":
+        alpha, xm = severity_params
+        integr_s = np.array([quad(lambda y: 1 - pareto_cdf(y, alpha, xm), s_values[0], s)[0] for s in s_values])
+        eval_s = pareto_pdf(s_values, alpha, xm)
+        if alpha == 1:
+            results2 = 2 * exp_comb * eval_s * integr_s
+        elif 0 < alpha < 1:
+            expr = - (2 - alpha) * gamma(2 - alpha) / ((alpha - 1) * gamma(3 - 2 * alpha))
+            results2 = exp_comb * expr * eval_s * integr_s
+        else:
+            results2 = 2 * exp_comb * exp_X * eval_s
+    elif severity_distribution_name == "Lognormal":
+        mu, sigma = severity_params
+        integr_s = np.array([quad(lambda y: 1 - lognormal_cdf(y, mu, sigma), s_values[0], s)[0] for s in s_values])
+        eval_s = lognormal_pdf(s_values, mu, sigma)
+        results2 = 2 * exp_comb * exp_X * eval_s
+    else:  # Weibull Case
+        lambda_, k = severity_params
+        eval_s = weibull_pdf(s_values, lambda_, k)
+        results2 = 2 * exp_comb * exp_X * eval_s
 
-    sum_results2 = [x + y for x, y in zip(results1, results2)]
+    return results1 + results2
 
-    return sum_results2
 
 # def higher_Order_Approximations(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
 
@@ -213,6 +205,7 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     N, X, exp_X, a, b = initialize_distributions(claims_distribution_name, claims_params, severity_distribution_name,
                                     severity_params)
     print("Claim amount distribution:", cdf(N))
+    print("Exp_N:", E(N).evalf())
     #print("Severity distribution:", cdf(X))
 
     # Evaluate first-order approximation
