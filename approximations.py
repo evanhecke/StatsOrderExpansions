@@ -1,11 +1,23 @@
 from math import gamma
-
-from sympy.stats import (Expectation, Probability, Poisson, Binomial, NegativeBinomial, LogNormal,
-                         Weibull, Frechet, Pareto, E, cdf, density, P, Normal)
-from sympy import exp, symbols, integrate, oo
-import numpy as np
+from numba import jit
 import matplotlib.pyplot as plt
-import conditions
+import numpy as np
+from scipy.integrate import quad
+from scipy.stats import norm
+from sympy import exp, oo
+from sympy.stats import (Poisson, Binomial, NegativeBinomial, LogNormal,
+                         Weibull, Frechet, Pareto, E, cdf)
+
+def calculate_exp_frechet(severity_params):
+    alpha, beta, min_val = severity_params
+
+    # Use scipy to evaluate expected value numerically
+    def integrand(x):
+        return x * frechet_pdf(x, alpha, beta, min_val)
+
+    exp_X, _ = quad(integrand, min_val, np.inf)
+
+    return exp_X
 
 def initialize_distributions(claims_distribution_name, claims_params, severity_distribution_name, severity_params):
     # Initialize the claim amount distribution
@@ -47,7 +59,7 @@ def initialize_distributions(claims_distribution_name, claims_params, severity_d
         beta = severity_params[1]
         min = severity_params[2]
         X = Frechet('X', alpha, beta, min)
-        exp_X = E(X)
+        exp_X = calculate_exp_frechet(severity_params)
     elif severity_distribution_name == 'Pareto':
         alpha = severity_params[0]
         xm = severity_params[1]
@@ -63,20 +75,48 @@ def initialize_distributions(claims_distribution_name, claims_params, severity_d
 
     return N, X, exp_X, a, b
 
+@jit
 def frechet_pdf(y, alpha, beta, min_val):
     """Custom PDF for the Frechet distribution."""
-    return (alpha / beta) * ((y - min_val) / beta) ** (-1 - alpha) * exp(-((y - min_val) / beta) ** (-alpha))
+    return (alpha / beta) * ((y - min_val) / beta) ** (-1 - alpha) * np.exp(-((y - min_val) / beta) ** (-alpha))
 
+@jit
 def frechet_cdf(y, alpha, beta, min_val):
     """Custom CDF for the Frechet distribution."""
-    return exp(-((y - min_val) / beta) ** (-alpha))
+    return np.exp(-((y - min_val) / beta) ** (-alpha))
 
+@jit
+def weibull_pdf(s, lambda_, k):
+    """Custom PDF for the Weibull distribution."""
+    return (k / lambda_) * (s / lambda_) ** (k - 1) * np.exp(-(s / lambda_) ** k)
+
+@jit
 def weibull_cdf(s, lambda_, k):
     """Custom CDF calculation for the Weibull distribution."""
-    return 1 - exp(-(s/lambda_)**k)
+    return 1 - np.exp(-(s / lambda_) ** k)
+
+@jit
+def pareto_pdf(s, alpha, xm):
+    """Custom PDF for the Pareto distribution."""
+    return (alpha * xm ** alpha) / s ** (alpha + 1)
+@jit
+def pareto_cdf(s, alpha, xm):
+    """Custom CDF calculation for the Pareto distribution."""
+    return 1 - (xm / s) ** alpha
+
+@jit
+def lognormal_pdf(s, mu, sigma):
+    """Custom PDF for the Lognormal distribution."""
+    return (1 / (s * sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((np.log(s) - mu) / sigma) ** 2)
+
+@jit
+def lognormal_cdf(s, mu, sigma):
+    """Custom CDF for the Lognormal distribution."""
+    return norm.cdf((np.log(s) - mu) / sigma)
+
 
 def first_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values):
-    results = []
+    results1 = []
     for s in s_values:
         if severity_distribution_name == 'Weibull':
             lambda_, k = severity_params
@@ -84,60 +124,63 @@ def first_Order_Approximation(amount, severity, severity_distribution_name, seve
         elif severity_distribution_name == 'Frechet':
             alpha, beta, min_val = severity_params
             tailX = 1 - frechet_cdf(s, alpha, beta, min_val)
-        else:
-            tailX = (1 - cdf(severity)(s)).evalf()
-        result = E(amount) * tailX
-        results.append(result)
-    return results
+        elif severity_distribution_name == 'Pareto':
+            alpha, xm = severity_params
+            tailX = 1 - pareto_cdf(s, alpha, xm)
+        elif severity_distribution_name == 'Lognormal':
+            mu, sigma = severity_params
+            tailX = 1 - lognormal_cdf(s, mu, sigma)
 
-def second_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
-    # Create empty array for the computed second order approximation values
+        result = E(amount).evalf() * tailX # Ensure result is a real number
+        if np.iscomplex(result):
+            result = result.real  # Take the real part if there's a small imaginary part
+        results1.append(result)
+
+    return results1
+
+
+def second_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1,
+                               exp_X):
     results2 = []
-    sum_results2 = []
 
-    # Create symbol to be used in density functions of sympy package
-    y = symbols('y', positive=True, finite=True)
+    # Calculate the expected value term of the combinator
+    exp_comb = E(amount * (amount - 1)).evalf()
 
-    # Calculate the expected value term of combinator found in all second order equations
-    exp_comb = E(amount * (amount - 1))
-
-    # Correctly identify which approximation to use and calculate it
-    if severity_distribution_name in ["Pareto", "Frechet"]:
-        # Pareto and Frechet have a distinct asymptotic approximation
-        alpha = severity_params[0]
-
-        if severity_distribution_name == "Pareto":
-            min = severity_params[1]
-        else:
-            min = severity_params[2]
-
-        # 2 Approximation cases, depending on the value of alpha
-        if alpha == float(1):
-            for s in s_values:
-                integr_s = integrate(1 - cdf(severity)(y), (y, min, s))
-                eval_s = (density(severity)(s)).evalf()
+    for s in s_values:
+        if severity_distribution_name == "Frechet":
+            alpha, beta, min_val = severity_params
+            eval_s = frechet_pdf(s, alpha, beta, min_val)
+            if alpha == 1:
+                integr_s, _ = quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)
                 results2.append(2 * exp_comb * eval_s * integr_s)
-            sum_results2 = [x + y for x, y in zip(results1, results2)]
-        elif alpha > 0 and alpha < 1:
-            for s in s_values:
-                integr_s = integrate(1 - cdf(severity)(y), (y, min, s))
-                eval_s = (density(severity)(s)).evalf()
+            elif 0 < alpha < 1:
+                integr_s, _ = quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)
                 expr = - (2 - alpha) * gamma(2 - alpha) / ((alpha - 1) * gamma(3 - 2 * alpha))
                 results2.append(exp_comb * expr * eval_s * integr_s)
-            sum_results2 = [x + y for x, y in zip(results1, results2)]
-        else:
-            # placeholder for cases with alpha > 1
-            for s in s_values:
-                eval_s = density(severity)(s).evalf()
+            else:
                 results2.append(2 * exp_comb * exp_X * eval_s)
-            sum_results2 = [x + y for x, y in zip(results1, results2)]
-    else:
-        # placeholder for second order calculation for other cases of frechet and pareto
-        # The asymptotic approximation is valid for Lognormal distribution and heavy-tailed Weibull distribution
-        for s in s_values:
-            eval_s = density(severity)(s).evalf()
+        elif severity_distribution_name == "Pareto":
+            alpha, xm = severity_params
+            integr_s, _ = quad(lambda y: 1 - pareto_cdf(y, alpha, xm), s_values[0], s)
+            eval_s = pareto_pdf(s, alpha, xm)
+            if alpha == 1:
+                results2.append(2 * exp_comb * eval_s * integr_s)
+            elif 0 < alpha < 1:
+                expr = - (2 - alpha) * gamma(2 - alpha) / ((alpha - 1) * gamma(3 - 2 * alpha))
+                results2.append(exp_comb * expr * eval_s * integr_s)
+            else:
+                results2.append(2 * exp_comb * exp_X * eval_s)
+        elif severity_distribution_name == "Lognormal":
+            mu, sigma = severity_params
+            integr_s, _ = quad(lambda y: 1 - lognormal_cdf(y, mu, sigma), s_values[0], s)
+            eval_s = lognormal_pdf(s, mu, sigma)
             results2.append(2 * exp_comb * exp_X * eval_s)
-        sum_results2 = [x + y for x, y in zip(results1, results2)]
+        else:  # Weibull Case
+            lambda_, k = severity_params
+            eval_s = weibull_pdf(s, lambda_, k)
+            results2.append(2 * exp_comb * exp_X * eval_s)
+
+    sum_results2 = [x + y for x, y in zip(results1, results2)]
 
     return sum_results2
 
@@ -154,12 +197,14 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     # print(cdf(Z)(5).evalf())
 
     # Define range of s values
+    # Add Epsilon to prevent division by zero in the exponent
+    epsilon = 1e-10
     if severity_distribution_name == "Pareto":
-        s_min = severity_params[1]
+        s_min = severity_params[1] + epsilon
     elif severity_distribution_name == "Frechet":
-        s_min = severity_params[2]
+        s_min = severity_params[2] + epsilon
     else:
-        s_min = 1
+        s_min = 1 + epsilon
     s_max = 1001
     num_points = 101  # Number of points to plot
     s_values = np.linspace(s_min, s_max, num_points)
@@ -177,6 +222,11 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     results2 = second_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
 
     # results3 = third_Order_Approximation(N, X, s_values, results2)
+
+    # Debug for complex values
+    #print("Results1:", results1)
+    #print("Exp_X:", exp_X)
+    #print("Results2:", results2)
 
     # Plot the approximation results
     plt.plot(s_values, results1, linestyle='-', marker='', label='First-Order Approximation')
