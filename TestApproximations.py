@@ -114,6 +114,7 @@ def lognormal_cdf(s, mu, sigma):
     """Custom CDF for the Lognormal distribution."""
     return norm.cdf((np.log(s) - mu) / sigma)
 
+
 def first_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values):
     if severity_distribution_name == 'Weibull':
         lambda_, k = severity_params
@@ -142,10 +143,11 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
     if severity_distribution_name == "Frechet":
         alpha, beta, min_val = severity_params
         eval_s = frechet_pdf(s_values, alpha, beta, min_val)
-        integr_s = np.array([quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)[0] for s in s_values])
         if alpha == 1:
+            integr_s = np.array([quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)[0] for s in s_values])
             results2 = 2 * exp_comb * eval_s * integr_s
         elif 0 < alpha < 1:
+            integr_s = np.array([quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)[0] for s in s_values])
             expr = - (2 - alpha) * gamma(2 - alpha) / ((alpha - 1) * gamma(3 - 2 * alpha))
             results2 = exp_comb * expr * eval_s * integr_s
         else:
@@ -163,6 +165,7 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
             results2 = 2 * exp_comb * exp_X * eval_s
     elif severity_distribution_name == "Lognormal":
         mu, sigma = severity_params
+        integr_s = np.array([quad(lambda y: 1 - lognormal_cdf(y, mu, sigma), s_values[0], s)[0] for s in s_values])
         eval_s = lognormal_pdf(s_values, mu, sigma)
         results2 = 2 * exp_comb * exp_X * eval_s
     else:  # Weibull Case
@@ -175,19 +178,7 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
 
 # def higher_Order_Approximations(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
 
-def plot_approximations(s_values, results1, results2):
-    """
-    This function plots the first-order and second-order approximations
-    on a new figure.
-    """
-    plt.figure()  # Create a new figure
-    plt.plot(s_values, results1, linestyle='-', marker='', label='First-Order Approximation')
-    plt.plot(s_values, results2, linestyle='-', marker='', label='Second-Order Approximation')
-    plt.xlabel('s values')
-    plt.ylabel('Approximation')
-    plt.title('Asymptotic Approximations')
-    plt.legend()
-    plt.show()
+
 
 def doCalculations(claims_distribution_name, claims_params, severity_distribution_name, severity_params):
 
@@ -231,4 +222,11 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     #print("Results2:", results2)
 
     # Plot the approximation results
-    plot_approximations(s_values, results1, results2)
+    plt.plot(s_values, results1, linestyle='-', marker='', label='First-Order Approximation')
+    plt.plot(s_values, results2, linestyle='-', marker='', label='Second-Order Approximation')
+    # plt.plot(s_values, results3, linestyle='-', marker='', label='Third-Order Approximation')
+    plt.xlabel('s values')
+    plt.ylabel('Approximation')
+    plt.title('Asymptotic Approximations')
+    plt.legend()
+    plt.show()
