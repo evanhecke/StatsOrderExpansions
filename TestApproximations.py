@@ -409,6 +409,8 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
                 if isinstance(results6, np.ndarray):
                     final_results6 = results5 + results6
 
+    return s_values, results1, results2,final_results3, final_results4, final_results5, final_results6
+    '''
     # Plot the approximation results
     plt.plot(s_values, results1, linestyle='-', marker='', label='First-Order Approximation')
     plt.plot(s_values, results2, linestyle='-', marker='', label='Second-Order Approximation')
@@ -428,3 +430,4 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     plt.xlim(s_min, s_max) # Set x-axis limits
     plt.xscale('log') # Set x-axis to logarithmic scale
     plt.show()
+    '''
