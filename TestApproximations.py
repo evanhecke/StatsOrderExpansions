@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import quad
 from scipy.stats import norm
-from sympy import exp, oo
+from sympy import exp, oo, Symbol, diff
 from sympy.stats import (Poisson, Binomial, NegativeBinomial, LogNormal,
-                         Weibull, Frechet, Pareto, E, cdf)
+                         Weibull, Frechet, Pareto, E, cdf, sample, density)
 
 def calculate_exp_frechet(severity_params):
     alpha, beta, min_val = severity_params
@@ -109,11 +109,10 @@ def lognormal_pdf(s, mu, sigma):
     """Custom PDF for the Lognormal distribution."""
     return (1 / (s * sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((np.log(s) - mu) / sigma) ** 2)
 
-@jit
+# No @jit decorator here, because norm is not supported by Numba
 def lognormal_cdf(s, mu, sigma):
     """Custom CDF for the Lognormal distribution."""
     return norm.cdf((np.log(s) - mu) / sigma)
-
 
 def first_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values):
     if severity_distribution_name == 'Weibull':
@@ -143,11 +142,10 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
     if severity_distribution_name == "Frechet":
         alpha, beta, min_val = severity_params
         eval_s = frechet_pdf(s_values, alpha, beta, min_val)
+        integr_s = np.array([quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)[0] for s in s_values])
         if alpha == 1:
-            integr_s = np.array([quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)[0] for s in s_values])
             results2 = 2 * exp_comb * eval_s * integr_s
         elif 0 < alpha < 1:
-            integr_s = np.array([quad(lambda y: 1 - frechet_cdf(y, alpha, beta, min_val), s_values[0], s)[0] for s in s_values])
             expr = - (2 - alpha) * gamma(2 - alpha) / ((alpha - 1) * gamma(3 - 2 * alpha))
             results2 = exp_comb * expr * eval_s * integr_s
         else:
@@ -165,7 +163,6 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
             results2 = 2 * exp_comb * exp_X * eval_s
     elif severity_distribution_name == "Lognormal":
         mu, sigma = severity_params
-        integr_s = np.array([quad(lambda y: 1 - lognormal_cdf(y, mu, sigma), s_values[0], s)[0] for s in s_values])
         eval_s = lognormal_pdf(s_values, mu, sigma)
         results2 = 2 * exp_comb * exp_X * eval_s
     else:  # Weibull Case
@@ -175,9 +172,184 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
 
     return results1 + results2
 
+# Define a function to compute the numerical derivative using finite differences
+def numerical_derivative(f, x, *params, epsilon=1e-5):
+    return (f(x + epsilon, *params) - f(x - epsilon, *params)) / (2 * epsilon)
+def third_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
+    # Parameters
+    j = 1  # Example value for j, adjust as needed
+    N_samples = 100  # Number of samples for Monte Carlo simulation
 
-# def higher_Order_Approximations(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
+    # Monte Carlo simulation
+    expected_value_samples = []
+    try:
+        for _ in range(N_samples):
+            n = sample(amount)
+            if n > 1:
+                X_values = [severity for _ in range(n - 1)]
+                sum_X = sum(X_values)
+                eval_sum_X = E(sum_X ** (j + 1)).evalf()
+                expected_value_samples.append(n * eval_sum_X)
 
+        # Calculate the expected value
+        expected_value = np.mean(expected_value_samples)
+
+        print(expected_value)
+
+        if severity_distribution_name == 'Weibull':
+            diffX = np.array([numerical_derivative(weibull_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Frechet':
+            diffX = np.array([numerical_derivative(frechet_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Pareto':
+            diffX = np.array([numerical_derivative(pareto_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Lognormal':
+            diffX = np.array([numerical_derivative(lognormal_pdf, s, *severity_params) for s in s_values])
+        else:
+            raise ValueError("Invalid severity distribution name")
+
+        print(diffX * expected_value)
+
+    except:
+        print("Value error, higher moments don't exist for the chosen parameters")
+        return 0
+
+    return (diffX * expected_value * 1/2)
+
+def numerical_second_derivative(f, x, *params, epsilon=1e-5):
+    """Compute the second derivative of f at x with parameters *params."""
+    return (numerical_derivative(f, x + epsilon, *params) - numerical_derivative(f, x - epsilon, *params)) / (2 * epsilon)
+
+def fourth_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
+    # Parameters
+    j = 2  # Example value for j, adjust as needed
+    N_samples = 100  # Number of samples for Monte Carlo simulation
+
+    # Monte Carlo simulation
+    expected_value_samples = []
+    try:
+        for _ in range(N_samples):
+            n = sample(amount)
+            if n > 1:
+                X_values = [severity for _ in range(n - 1)]
+                sum_X = sum(X_values)
+                eval_sum_X = E(sum_X ** (j + 1)).evalf()
+                expected_value_samples.append(n * eval_sum_X)
+
+        # Calculate the expected value
+        expected_value = np.mean(expected_value_samples)
+
+        print(expected_value)
+        print(expected_value * 1/6)
+
+        if severity_distribution_name == 'Weibull':
+            diffX = np.array([numerical_second_derivative(weibull_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Frechet':
+            diffX = np.array([numerical_second_derivative(frechet_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Pareto':
+            diffX = np.array([numerical_second_derivative(pareto_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Lognormal':
+            diffX = np.array([numerical_second_derivative(lognormal_pdf, s, *severity_params) for s in s_values])
+        else:
+            raise ValueError("Invalid severity distribution name")
+
+        print(diffX * expected_value * 1/6)
+
+    except:
+        print("Value error, higher moments don't exist for the chosen parameters")
+        return 0
+
+    return (diffX * expected_value)
+
+
+def numerical_third_derivative(f, x, *params, epsilon=1e-5):
+    """Compute the third derivative of f at x with parameters *params."""
+    return (numerical_second_derivative(f, x + epsilon, *params) - numerical_second_derivative(f, x - epsilon, *params)) / (2 * epsilon)
+
+def fifth_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
+    # Parameters
+    j = 3  # Example value for j, adjust as needed
+    N_samples = 100  # Number of samples for Monte Carlo simulation
+
+    # Monte Carlo simulation
+    expected_value_samples = []
+    try:
+        for _ in range(N_samples):
+            n = sample(amount)
+            if n > 1:
+                X_values = [severity for _ in range(n - 1)]
+                sum_X = sum(X_values)
+                eval_sum_X = E(sum_X ** (j + 1)).evalf()
+                expected_value_samples.append(n * eval_sum_X)
+
+        # Calculate the expected value
+        expected_value = np.mean(expected_value_samples)
+
+        print(expected_value)
+        print(expected_value * 1/24)
+
+        if severity_distribution_name == 'Weibull':
+            diffX = np.array([numerical_third_derivative(weibull_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Frechet':
+            diffX = np.array([numerical_third_derivative(frechet_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Pareto':
+            diffX = np.array([numerical_third_derivative(pareto_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Lognormal':
+            diffX = np.array([numerical_third_derivative(lognormal_pdf, s, *severity_params) for s in s_values])
+        else:
+            raise ValueError("Invalid severity distribution name")
+
+        print(diffX * expected_value * 1/24)
+
+    except:
+        print("Value error, higher moments don't exist for the chosen parameters")
+        return 0
+
+    return (diffX * expected_value)
+
+def numerical_fourth_derivative(f, x, *params, epsilon=1e-5):
+    """Compute the fourth derivative of f at x with parameters *params."""
+    return (numerical_third_derivative(f, x + epsilon, *params) - numerical_third_derivative(f, x - epsilon, *params)) / (2 * epsilon)
+
+def sixth_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
+    # Parameters
+    j = 4  # Example value for j, adjust as needed
+    N_samples = 100  # Number of samples for Monte Carlo simulation
+
+    # Monte Carlo simulation
+    expected_value_samples = []
+    try:
+        for _ in range(N_samples):
+            n = sample(amount)
+            if n > 1:
+                X_values = [severity for _ in range(n - 1)]
+                sum_X = sum(X_values)
+                eval_sum_X = E(sum_X ** (j + 1)).evalf()
+                expected_value_samples.append(n * eval_sum_X)
+
+        # Calculate the expected value
+        expected_value = np.mean(expected_value_samples)
+
+        print(expected_value)
+        print(expected_value * 1/120)
+
+        if severity_distribution_name == 'Weibull':
+            diffX = np.array([numerical_fourth_derivative(weibull_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Frechet':
+            diffX = np.array([numerical_fourth_derivative(frechet_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Pareto':
+            diffX = np.array([numerical_fourth_derivative(pareto_pdf, s, *severity_params) for s in s_values])
+        elif severity_distribution_name == 'Lognormal':
+            diffX = np.array([numerical_fourth_derivative(lognormal_pdf, s, *severity_params) for s in s_values])
+        else:
+            raise ValueError("Invalid severity distribution name")
+
+        print(diffX * expected_value * 1/120)
+
+    except:
+        print("Value error, higher moments don't exist for the chosen parameters")
+        return 0
+
+    return (diffX * expected_value)
 
 
 def doCalculations(claims_distribution_name, claims_params, severity_distribution_name, severity_params):
@@ -198,7 +370,7 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     else:
         s_min = 1 + epsilon
     s_max = 1001
-    num_points = 101  # Number of points to plot
+    num_points = 10001  # Number of points to plot
     s_values = np.linspace(s_min, s_max, num_points)
 
     # Initialize distributions
@@ -208,25 +380,51 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     print("Exp_N:", E(N).evalf())
     #print("Severity distribution:", cdf(X))
 
+    # Set custom y-axis limits
+    y_min, y_max = -10, 100  # Example limits, adjust as needed
+
     # Evaluate first-order approximation
     results1 = first_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values)
 
     # Evaluate second-order approximation
     results2 = second_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
 
-    # results3 = third_Order_Approximation(N, X, s_values, results2)
+    results3 = third_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
 
-    # Debug for complex values
-    #print("Results1:", results1)
-    #print("Exp_X:", exp_X)
-    #print("Results2:", results2)
+    results4 = fourth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
+
+    results5 = fifth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
+
+    results6 = sixth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
+
+
+
+    # make a nice message error box for tinker for the higher moments problem
+    if isinstance(results3, np.ndarray):
+        final_results3 = results2 - results3
+        if isinstance(results4, np.ndarray):
+            final_results4 = results3 + results4
+            if isinstance(results5, np.ndarray):
+                final_results5 = results4 - results5
+                if isinstance(results6, np.ndarray):
+                    final_results6 = results5 + results6
 
     # Plot the approximation results
     plt.plot(s_values, results1, linestyle='-', marker='', label='First-Order Approximation')
     plt.plot(s_values, results2, linestyle='-', marker='', label='Second-Order Approximation')
-    # plt.plot(s_values, results3, linestyle='-', marker='', label='Third-Order Approximation')
+    try:
+        plt.plot(s_values, final_results3, linestyle='-', marker='', label='Third-Order Approximation')
+        plt.plot(s_values, final_results4, linestyle='-', marker='', label='Fourth-Order Approximation')
+        plt.plot(s_values, final_results5, linestyle='-', marker='', label='Fifth-Order Approximation')
+        plt.plot(s_values, final_results6, linestyle='-', marker='', label='Sixth-Order Approximation')
+    except:
+        print("Failed")
+
     plt.xlabel('s values')
     plt.ylabel('Approximation')
     plt.title('Asymptotic Approximations')
     plt.legend()
+    plt.ylim(y_min, y_max)  # Set y-axis limits
+    plt.xlim(s_min, s_max) # Set x-axis limits
+    plt.xscale('log') # Set x-axis to logarithmic scale
     plt.show()
