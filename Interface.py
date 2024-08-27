@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from tkinter import ttk
 from approximations import doCalculations
 from PIL import Image, ImageTk
+import numpy as np
 import io
 
 
@@ -60,7 +61,9 @@ class PlottingWindow(tk.Toplevel):
         """Add a smaller plot to the left frame with a given title."""
         fig, ax = plt.subplots(figsize=(3, 2))  # Smaller size for smaller plots
         for i, result in enumerate(results, start=1):
-            ax.plot(s_values, result, label=f"Result {i}")
+            if result is not None:
+                ax.plot(s_values, result, label=f"Result {i}")
+
         ax.set_xlabel("s")
         ax.set_ylabel("Relative Approximations")
         ax.set_title(title)  # Use the provided title
@@ -99,8 +102,10 @@ class PlottingWindow(tk.Toplevel):
         fig, ax = plt.subplots(figsize=(8, 6))
 
         for i, result in enumerate(results, start=1):
-            ax.plot(s_values, result, label=f"{i}-th Order Approximation")
-
+            if result is not None:
+                ax.plot(s_values, result, label=f"{i}-th Order Approximation")
+            else:
+                break # Break out of the for loop as soon as i-th order approximation doesn't exist
         ax.set_xlabel("s")
         ax.set_ylabel("Relative Approximations")
         ax.set_title(title)  # Use the provided title
@@ -500,6 +505,22 @@ class DistributionCalculator(tk.Tk):
             results1, results2, results3, results4, results5, results6,
         )
 
+    def count_sign_changes(self, result):
+        """Count the number of times the sign changes in the result."""
+        if result is None or len(result) < 2:
+            return 0
+
+        sign_changes = 0
+        previous_sign = np.sign(result[0])
+
+        for value in result[100:200]: # change ending value accordingly
+            current_sign = np.sign(value)
+            if current_sign != previous_sign and current_sign != 0:
+                sign_changes += 1
+                previous_sign = current_sign
+
+        return sign_changes
+
     def plot_results(self, s_values, claims_dist_name, claims_params, severity_dist_name, severity_params, *results):
         """Open or update the plotting window with new results and titles."""
         if not self.plotting_window:
@@ -510,9 +531,39 @@ class DistributionCalculator(tk.Tk):
         severity_title = f"{severity_dist_name}({', '.join(f'{v}' for v in severity_params)})"
         plot_title = f"{claims_title}, {severity_title}"
 
-        # Update the plotting window with new results
-        self.plotting_window.show_large_plot(s_values, *results, title=plot_title)
-        self.plotting_window.add_smaller_plot(s_values, *results, title=plot_title)
+        # Prepare results for plotting
+        results_to_plot = []
+        oscillatory_results = []
+
+        for i in range(len(results)):
+            if results[i] is not None:
+                result = results[i]
+                sign_changes = self.count_sign_changes(result)
+                if i >= 2 and sign_changes > 10:
+                    # This is a higher-order approximation that is oscillatory
+                    oscillatory_results.append(f"{i + 1}-th Order Approximation")
+                else:
+                    # This result is not oscillatory and should be plotted
+                    results_to_plot.append(result)
+
+        # Check if any higher-order approximations are missing
+        missing_approximations = [f"{i + 1}-th Order Approximation" for i in range(2, 6) if i >= len(results) or results[i] is None]
+        if missing_approximations:
+            missing_msg = ("Some higher order approximations don't exist for the chosen parameter values:\n" +
+                           "\n".join(missing_approximations))
+            tk.messagebox.showwarning("Missing Approximations", missing_msg)
+
+        if oscillatory_results:
+            oscillation_msg = ("The following higher order approximations are too oscillatory and will "
+                               "not be plotted:\n") + "\n".join(oscillatory_results)
+            tk.messagebox.showwarning("Oscillatory Results", oscillation_msg)
+
+        # Plot results
+        if results_to_plot:
+            self.plotting_window.show_large_plot(s_values, *results_to_plot, title=plot_title)
+            self.plotting_window.add_smaller_plot(s_values, *results_to_plot, title=plot_title)
+        else:
+            tk.messagebox.showwarning("No Results", "No results available to plot.")
 
 
 if __name__ == "__main__":

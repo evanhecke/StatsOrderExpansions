@@ -189,7 +189,18 @@ def third_Order_Approximation(amount, severity, severity_distribution_name, seve
                 X_values = [severity for _ in range(n - 1)]
                 sum_X = sum(X_values)
                 eval_sum_X = E(sum_X ** (j + 1)).evalf()
-                expected_value_samples.append(n * eval_sum_X)
+
+                max_value = 1e+300  # Define a threshold for maximum value
+                if eval_sum_X > max_value:
+                    print(f"Warning: eval_sum_X is too large: {eval_sum_X}")
+                    eval_sum_X = max_value  # Cap the value to prevent overflow
+
+                testResult = n * eval_sum_X
+                if testResult > max_value:
+                    print(f"Warning: Result is too large: {testResult}")
+                    testResult = max_value  # Cap the result if it is too large
+
+            expected_value_samples.append(testResult)
 
         # Calculate the expected value
         expected_value = np.mean(expected_value_samples)
@@ -350,38 +361,36 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     # Initialize distributions
     N, X, exp_X, a, b = initialize_distributions(claims_distribution_name, claims_params, severity_distribution_name,
                                     severity_params)
-    print("Claim amount distribution:", cdf(N))
-    print("Exp_N:", E(N).evalf())
-    #print("Severity distribution:", cdf(X))
-
-    # Set custom y-axis limits
-    y_min, y_max = -10, 100  # Example limits, adjust as needed
 
     # Evaluate first-order approximation
     results1 = first_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values)
 
-    # Evaluate second-order approximation
+    # Evaluate second- and higher-order approximations
     results2 = second_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
+
+    # Check if the higher order approximations return a result
+    final_results3 = final_results4 = final_results5 = final_results6 = None # set the approximation value to None to handle in interface
 
     results3 = third_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
 
-    results4 = fourth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
-
-    results5 = fifth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
-
-    results6 = sixth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
-
-
-
-    # make a nice message error box for tinker for the higher moments problem
     if isinstance(results3, np.ndarray):
         final_results3 = results2 - results3
+        results4 = fourth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1,
+                                              exp_X)
+        print("3 done")
         if isinstance(results4, np.ndarray):
             final_results4 = results3 + results4
+            results5 = fifth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1,
+                                                 exp_X)
+            print("4 done")
             if isinstance(results5, np.ndarray):
                 final_results5 = results4 - results5
+                results6 = sixth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values,
+                                                     results1, exp_X)
+                print("5 done")
                 if isinstance(results6, np.ndarray):
                     final_results6 = results5 + results6
+                    print("6 done")
 
     return s_values, results1, results2,final_results3, final_results4, final_results5, final_results6
 
