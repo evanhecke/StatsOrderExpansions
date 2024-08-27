@@ -6,6 +6,139 @@ from PIL import Image, ImageTk
 import io
 
 
+class PlottingWindow(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Plotting Window")
+        self.configure(bg='white')
+
+        # Initial dimensions
+        self.geometry("1200x600")
+
+        # Create frames for layout
+        self.left_frame = ttk.Frame(self, width=300, relief=tk.SUNKEN)
+        self.left_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10, anchor='n')
+
+        self.right_frame = ttk.Frame(self)
+        self.right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Canvas for smaller plots with vertical scrollbar
+        self.smaller_plots_canvas = tk.Canvas(self.left_frame, bg='white')
+        self.smaller_plots_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.scrollbar = ttk.Scrollbar(self.left_frame, orient="vertical", command=self.smaller_plots_canvas.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.smaller_plots_canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # Frame inside canvas for smaller plots
+        self.smaller_plots_frame = ttk.Frame(self.smaller_plots_canvas)
+        self.smaller_plots_canvas.create_window((0, 0), window=self.smaller_plots_frame, anchor="nw")
+
+        # Label for displaying the large plot
+        self.large_plot_label = ttk.Label(self.right_frame)
+        self.large_plot_label.pack(fill=tk.BOTH, expand=True)
+
+        self.plot_images = []
+        self.plot_map = {}
+
+        # Bind resize event to update canvas scrollregion
+        self.bind("<Configure>", self.on_resize)
+
+        # Variable to keep track of the currently displayed plot
+        self.current_plot_index = None
+        self.current_plot_title = None  # To keep track of the current plot title
+
+    def on_resize(self, event):
+        """Update scrollregion to match the canvas contents."""
+        self.smaller_plots_canvas.config(scrollregion=self.smaller_plots_canvas.bbox("all"))
+
+    def update_window_size(self, width, height):
+        """Set the size of the window dynamically."""
+        self.geometry(f"{width}x{height}")
+
+    def add_smaller_plot(self, s_values, *results, title):
+        """Add a smaller plot to the left frame with a given title."""
+        fig, ax = plt.subplots(figsize=(3, 2))  # Smaller size for smaller plots
+        for i, result in enumerate(results, start=1):
+            ax.plot(s_values, result, label=f"Result {i}")
+        ax.set_xlabel("s")
+        ax.set_ylabel("Relative Approximations")
+        ax.set_title(title)  # Use the provided title
+
+        # Set custom axis scales
+        ax.set_ylim(-10, 100)  # Adjust these limits as needed
+        ax.set_xscale('log')  # Set x-axis to logarithmic scale
+
+        # Save plot to BytesIO stream
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
+        buf.seek(0)
+        image = Image.open(buf)
+        photo = ImageTk.PhotoImage(image)
+
+        # Store plot for later selection
+        index = len(self.plot_images)
+        self.plot_images.append(photo)
+        self.plot_map[index] = (photo, s_values, *results, title)
+
+        # Display smaller plot in canvas
+        y_position = index * 250  # Adjust spacing as needed
+        plot_id = self.smaller_plots_canvas.create_image(150, y_position, image=photo, tags=str(index))
+        self.smaller_plots_frame.update_idletasks()
+
+        # Update scrollregion
+        self.smaller_plots_canvas.config(scrollregion=self.smaller_plots_canvas.bbox("all"))
+
+        # Bind click event
+        self.smaller_plots_canvas.tag_bind(plot_id, "<Button-1>", lambda e, idx=index: self.on_plot_click(idx))
+
+        plt.close(fig)
+
+    def show_large_plot(self, s_values, *results, title):
+        """Display the large plot in the right frame with a given title."""
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+        for i, result in enumerate(results, start=1):
+            ax.plot(s_values, result, label=f"{i}-th Order Approximation")
+
+        ax.set_xlabel("s")
+        ax.set_ylabel("Relative Approximations")
+        ax.set_title(title)  # Use the provided title
+        ax.legend()
+
+        # Set custom axis scales
+        ax.set_ylim(-10, 100)  # Adjust these limits as needed
+        ax.set_xscale('log')  # Set x-axis to logarithmic scale
+
+        # Save to BytesIO stream
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', pad_inches=0.1)
+        buf.seek(0)
+        image = Image.open(buf)
+        photo = ImageTk.PhotoImage(image)
+
+        # Display large plot
+        self.large_plot_label.config(image=photo)
+        self.large_plot_label.image = photo  # Keep a reference
+
+        plt.close(fig)
+
+    def on_plot_click(self, index):
+        """Handle clicks on smaller plots to show the corresponding large plot and swap the large plot back to small."""
+        if index in self.plot_map:
+            # Get the currently clicked plot's data
+            clicked_plot_data = self.plot_map[index]
+            _, s_values, *results, title = clicked_plot_data
+
+            # Show this plot as the large plot
+            self.show_large_plot(s_values, *results, title=title)
+
+            # Set the clicked plot as the current large plot
+            self.current_plot_index = index
+            self.current_plot_title = title  # Update current plot title
+
+
+
 class DistributionCalculator(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -46,6 +179,8 @@ class DistributionCalculator(tk.Tk):
             # "Gamma": r"$f(x) = \frac{x^{k-1} e^{-\frac{x}{\theta}}}{\theta^k \Gamma(k)}, \quad x \geq 0$",
             # "Normal": r"$f(x) = \frac{1}{\sigma \sqrt{2\pi}} e^{-\frac{(x - \mu)^2}{2\sigma^2}}$"
         }
+
+        self.plotting_window = None  # Placeholder for the plotting window
 
         self.setup_ui()
 
@@ -91,6 +226,14 @@ class DistributionCalculator(tk.Tk):
         # Button for calculations
         self.calculate_button = ttk.Button(self, text="Calculate", command=self.calculate)
         self.calculate_button.grid(row=2, column=0, columnspan=2, padx=10, pady=5)
+
+        # Frame for plotting
+        self.plot_frame = ttk.Frame(self)
+        self.plot_frame.grid(row=3, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
+
+        # Initial plot placeholder
+        self.plot_label = ttk.Label(self.plot_frame)
+        self.plot_label.pack()
 
     def generate_claims_parameter_inputs(self, event=None):
         # Remove previous parameter frame
@@ -345,7 +488,31 @@ class DistributionCalculator(tk.Tk):
         print("Severity Distribution:", severity_distribution_name)
         print("Severity Distribution Parameters:", severity_params)
 
-        doCalculations(claims_distribution_name, claims_params, severity_distribution_name, severity_params)
+        # Get data for plotting
+        s_values, results1, results2, results3, results4, results5, results6 = doCalculations(
+            claims_distribution_name, claims_params, severity_distribution_name, severity_params
+        )
+
+        # Pass distribution details to plot_results
+        self.plot_results(
+            s_values, claims_distribution_name, claims_params,
+            severity_distribution_name, severity_params,
+            results1, results2, results3, results4, results5, results6,
+        )
+
+    def plot_results(self, s_values, claims_dist_name, claims_params, severity_dist_name, severity_params, *results):
+        """Open or update the plotting window with new results and titles."""
+        if not self.plotting_window:
+            self.plotting_window = PlottingWindow(self)
+
+        # Generate titles based on the chosen distributions and parameters
+        claims_title = f"{claims_dist_name}({', '.join(f'{v}' for v in claims_params)})"
+        severity_title = f"{severity_dist_name}({', '.join(f'{v}' for v in severity_params)})"
+        plot_title = f"{claims_title}, {severity_title}"
+
+        # Update the plotting window with new results
+        self.plotting_window.show_large_plot(s_values, *results, title=plot_title)
+        self.plotting_window.add_smaller_plot(s_values, *results, title=plot_title)
 
 
 if __name__ == "__main__":

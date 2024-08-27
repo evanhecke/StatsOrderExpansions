@@ -1,6 +1,5 @@
 from math import gamma
 from numba import jit
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import quad
 from scipy.stats import norm
@@ -194,8 +193,6 @@ def third_Order_Approximation(amount, severity, severity_distribution_name, seve
         # Calculate the expected value
         expected_value = np.mean(expected_value_samples)
 
-        print(expected_value)
-
         if severity_distribution_name == 'Weibull':
             diffX = np.array([numerical_derivative(weibull_pdf, s, *severity_params) for s in s_values])
         elif severity_distribution_name == 'Frechet':
@@ -206,8 +203,6 @@ def third_Order_Approximation(amount, severity, severity_distribution_name, seve
             diffX = np.array([numerical_derivative(lognormal_pdf, s, *severity_params) for s in s_values])
         else:
             raise ValueError("Invalid severity distribution name")
-
-        print(diffX * expected_value)
 
     except:
         print("Value error, higher moments don't exist for the chosen parameters")
@@ -238,9 +233,6 @@ def fourth_Order_Approximation(amount, severity, severity_distribution_name, sev
         # Calculate the expected value
         expected_value = np.mean(expected_value_samples)
 
-        print(expected_value)
-        print(expected_value * 1/6)
-
         if severity_distribution_name == 'Weibull':
             diffX = np.array([numerical_second_derivative(weibull_pdf, s, *severity_params) for s in s_values])
         elif severity_distribution_name == 'Frechet':
@@ -252,8 +244,6 @@ def fourth_Order_Approximation(amount, severity, severity_distribution_name, sev
         else:
             raise ValueError("Invalid severity distribution name")
 
-        print(diffX * expected_value * 1/6)
-
     except:
         print("Value error, higher moments don't exist for the chosen parameters")
         return 0
@@ -261,7 +251,7 @@ def fourth_Order_Approximation(amount, severity, severity_distribution_name, sev
     return (diffX * expected_value)
 
 
-def numerical_third_derivative(f, x, *params, epsilon=1e-5):
+def numerical_third_derivative(f, x, *params, epsilon=1e-2):
     """Compute the third derivative of f at x with parameters *params."""
     return (numerical_second_derivative(f, x + epsilon, *params) - numerical_second_derivative(f, x - epsilon, *params)) / (2 * epsilon)
 
@@ -284,9 +274,6 @@ def fifth_Order_Approximation(amount, severity, severity_distribution_name, seve
         # Calculate the expected value
         expected_value = np.mean(expected_value_samples)
 
-        print(expected_value)
-        print(expected_value * 1/24)
-
         if severity_distribution_name == 'Weibull':
             diffX = np.array([numerical_third_derivative(weibull_pdf, s, *severity_params) for s in s_values])
         elif severity_distribution_name == 'Frechet':
@@ -298,15 +285,13 @@ def fifth_Order_Approximation(amount, severity, severity_distribution_name, seve
         else:
             raise ValueError("Invalid severity distribution name")
 
-        print(diffX * expected_value * 1/24)
-
     except:
         print("Value error, higher moments don't exist for the chosen parameters")
         return 0
 
     return (diffX * expected_value)
 
-def numerical_fourth_derivative(f, x, *params, epsilon=1e-5):
+def numerical_fourth_derivative(f, x, *params, epsilon=1e-2):
     """Compute the fourth derivative of f at x with parameters *params."""
     return (numerical_third_derivative(f, x + epsilon, *params) - numerical_third_derivative(f, x - epsilon, *params)) / (2 * epsilon)
 
@@ -329,9 +314,6 @@ def sixth_Order_Approximation(amount, severity, severity_distribution_name, seve
         # Calculate the expected value
         expected_value = np.mean(expected_value_samples)
 
-        print(expected_value)
-        print(expected_value * 1/120)
-
         if severity_distribution_name == 'Weibull':
             diffX = np.array([numerical_fourth_derivative(weibull_pdf, s, *severity_params) for s in s_values])
         elif severity_distribution_name == 'Frechet':
@@ -343,8 +325,6 @@ def sixth_Order_Approximation(amount, severity, severity_distribution_name, seve
         else:
             raise ValueError("Invalid severity distribution name")
 
-        print(diffX * expected_value * 1/120)
-
     except:
         print("Value error, higher moments don't exist for the chosen parameters")
         return 0
@@ -353,13 +333,6 @@ def sixth_Order_Approximation(amount, severity, severity_distribution_name, seve
 
 
 def doCalculations(claims_distribution_name, claims_params, severity_distribution_name, severity_params):
-
-    # print(Expectation(N).doit())
-    # print((P(N > 4)).evalf(3))
-    # Z = Normal('Z', 5, 2)
-    # print(cdf(N)(1).evalf())
-    # print(cdf(Z)(5).evalf())
-
     # Define range of s values
     # Add Epsilon to prevent division by zero in the exponent
     epsilon = 1e-10
@@ -409,22 +382,5 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
                 if isinstance(results6, np.ndarray):
                     final_results6 = results5 + results6
 
-    # Plot the approximation results
-    plt.plot(s_values, results1, linestyle='-', marker='', label='First-Order Approximation')
-    plt.plot(s_values, results2, linestyle='-', marker='', label='Second-Order Approximation')
-    try:
-        plt.plot(s_values, final_results3, linestyle='-', marker='', label='Third-Order Approximation')
-        plt.plot(s_values, final_results4, linestyle='-', marker='', label='Fourth-Order Approximation')
-        plt.plot(s_values, final_results5, linestyle='-', marker='', label='Fifth-Order Approximation')
-        plt.plot(s_values, final_results6, linestyle='-', marker='', label='Sixth-Order Approximation')
-    except:
-        print("Failed")
+    return s_values, results1, results2,final_results3, final_results4, final_results5, final_results6
 
-    plt.xlabel('s values')
-    plt.ylabel('Approximation')
-    plt.title('Asymptotic Approximations')
-    plt.legend()
-    plt.ylim(y_min, y_max)  # Set y-axis limits
-    plt.xlim(s_min, s_max) # Set x-axis limits
-    plt.xscale('log') # Set x-axis to logarithmic scale
-    plt.show()
