@@ -193,7 +193,7 @@ def third_Order_Approximation(amount, severity, severity_distribution_name, seve
                 max_value = 1e+300  # Define a threshold for maximum value
                 if eval_sum_X > max_value:
                     print(f"Warning: eval_sum_X is too large: {eval_sum_X}")
-                    eval_sum_X = max_value  # Cap the value to prevent overflow
+                    eval_sum_X = max_value / 1000 # Cap the value to prevent overflow
 
                 testResult = n * eval_sum_X
                 if testResult > max_value:
@@ -354,8 +354,8 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
         s_min = severity_params[2] + epsilon
     else:
         s_min = 1 + epsilon
-    s_max = 1001
-    num_points = 10001  # Number of points to plot
+    s_max = 100001
+    num_points = 100001  # Number of points to plot
     s_values = np.linspace(s_min, s_max, num_points)
 
     # Initialize distributions
@@ -371,26 +371,28 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     # Check if the higher order approximations return a result
     final_results3 = final_results4 = final_results5 = final_results6 = None # set the approximation value to None to handle in interface
 
-    results3 = third_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
+    # Don't do higher order approximations for Frechet, it takes too long because of symbolic evaluation of sum of random variables
+    if severity_distribution_name != "Frechet":
+        results3 = third_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1, exp_X)
 
-    if isinstance(results3, np.ndarray):
-        final_results3 = results2 - results3
-        results4 = fourth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1,
-                                              exp_X)
-        print("3 done")
-        if isinstance(results4, np.ndarray):
-            final_results4 = results3 + results4
-            results5 = fifth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1,
-                                                 exp_X)
-            print("4 done")
-            if isinstance(results5, np.ndarray):
-                final_results5 = results4 - results5
-                results6 = sixth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values,
-                                                     results1, exp_X)
-                print("5 done")
-                if isinstance(results6, np.ndarray):
-                    final_results6 = results5 + results6
-                    print("6 done")
+        if isinstance(results3, np.ndarray):
+            final_results3 = results2 - results3
+            results4 = fourth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1,
+                                                  exp_X)
+            print("3 done")
+            if isinstance(results4, np.ndarray):
+                final_results4 = results3 + results4
+                results5 = fifth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values, results1,
+                                                     exp_X)
+                print("4 done")
+                if isinstance(results5, np.ndarray):
+                    final_results5 = results4 - results5
+                    results6 = sixth_Order_Approximation(N, X, severity_distribution_name, severity_params, s_values,
+                                                         results1, exp_X)
+                    print("5 done")
+                    if isinstance(results6, np.ndarray):
+                        final_results6 = results5 + results6
+                        print("6 done")
 
     return s_values, results1, results2,final_results3, final_results4, final_results5, final_results6
 

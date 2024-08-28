@@ -69,7 +69,7 @@ class PlottingWindow(tk.Toplevel):
         ax.set_title(title)  # Use the provided title
 
         # Set custom axis scales
-        ax.set_ylim(-10, 100)  # Adjust these limits as needed
+        ax.set_ylim(-2, 12)  # Adjust these limits as needed
         ax.set_xscale('log')  # Set x-axis to logarithmic scale
 
         # Save plot to BytesIO stream
@@ -112,7 +112,7 @@ class PlottingWindow(tk.Toplevel):
         ax.legend()
 
         # Set custom axis scales
-        ax.set_ylim(-10, 100)  # Adjust these limits as needed
+        ax.set_ylim(-2, 12)  # Adjust these limits as needed
         ax.set_xscale('log')  # Set x-axis to logarithmic scale
 
         # Save to BytesIO stream
@@ -513,7 +513,7 @@ class DistributionCalculator(tk.Tk):
         sign_changes = 0
         previous_sign = np.sign(result[0])
 
-        for value in result[400:550]: # change ending value accordingly
+        for value in result[400:1000]: # change ending value accordingly
             current_sign = np.sign(value)
             if current_sign != previous_sign and current_sign != 0:
                 sign_changes += 1
@@ -541,7 +541,7 @@ class DistributionCalculator(tk.Tk):
                 if severity_dist_name == "Weibull":
                     result = results[i]
                     sign_changes = self.count_sign_changes(result)
-                    if i >= 2 and sign_changes > 10:
+                    if i >= 2 and sign_changes > 20:
                         # This is a higher-order approximation that is oscillatory
                         oscillatory_results.append(f"{i + 1}-th Order Approximation")
                     else:
@@ -553,8 +553,12 @@ class DistributionCalculator(tk.Tk):
 
         # Check if any higher-order approximations are missing
         missing_approximations = [f"{i + 1}-th Order Approximation" for i in range(2, 6) if i >= len(results) or results[i] is None]
-        if missing_approximations:
+        if missing_approximations and severity_dist_name != "Frechet":
             missing_msg = ("Some higher order approximations don't exist for the chosen parameter values:\n" +
+                           "\n".join(missing_approximations))
+            tk.messagebox.showwarning("Missing Approximations", missing_msg)
+        elif severity_dist_name == "Frechet":
+            missing_msg = ("Some higher order approximations are not shown because the calculation takes too long for the Frechet distribution:\n" +
                            "\n".join(missing_approximations))
             tk.messagebox.showwarning("Missing Approximations", missing_msg)
 
