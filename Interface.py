@@ -513,7 +513,7 @@ class DistributionCalculator(tk.Tk):
         sign_changes = 0
         previous_sign = np.sign(result[0])
 
-        for value in result[100:200]: # change ending value accordingly
+        for value in result[400:550]: # change ending value accordingly
             current_sign = np.sign(value)
             if current_sign != previous_sign and current_sign != 0:
                 sign_changes += 1
@@ -535,15 +535,20 @@ class DistributionCalculator(tk.Tk):
         results_to_plot = []
         oscillatory_results = []
 
+        # Check of the weibull approximations don't oscillate too much
         for i in range(len(results)):
             if results[i] is not None:
-                result = results[i]
-                sign_changes = self.count_sign_changes(result)
-                if i >= 2 and sign_changes > 10:
-                    # This is a higher-order approximation that is oscillatory
-                    oscillatory_results.append(f"{i + 1}-th Order Approximation")
+                if severity_dist_name == "Weibull":
+                    result = results[i]
+                    sign_changes = self.count_sign_changes(result)
+                    if i >= 2 and sign_changes > 10:
+                        # This is a higher-order approximation that is oscillatory
+                        oscillatory_results.append(f"{i + 1}-th Order Approximation")
+                    else:
+                        # This result is not oscillatory and should be plotted
+                        results_to_plot.append(result)
                 else:
-                    # This result is not oscillatory and should be plotted
+                    result = results[i]
                     results_to_plot.append(result)
 
         # Check if any higher-order approximations are missing
@@ -553,7 +558,7 @@ class DistributionCalculator(tk.Tk):
                            "\n".join(missing_approximations))
             tk.messagebox.showwarning("Missing Approximations", missing_msg)
 
-        if oscillatory_results:
+        if oscillatory_results and severity_dist_name == "Weibull":
             oscillation_msg = ("The following higher order approximations are too oscillatory and will "
                                "not be plotted:\n") + "\n".join(oscillatory_results)
             tk.messagebox.showwarning("Oscillatory Results", oscillation_msg)

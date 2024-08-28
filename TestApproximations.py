@@ -172,6 +172,7 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
 
     return results1 + results2
 
+
 # Define a function to compute the numerical derivative using finite differences
 def numerical_derivative(f, x, *params, epsilon=1e-5):
     return (f(x + epsilon, *params) - f(x - epsilon, *params)) / (2 * epsilon)
