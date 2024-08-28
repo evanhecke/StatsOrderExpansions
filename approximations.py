@@ -114,6 +114,87 @@ def lognormal_cdf(s, mu, sigma):
     """Custom CDF for the Lognormal distribution."""
     return norm.cdf((np.log(s) - mu) / sigma)
 
+"""
+def panjer_recursion_bounds(a, b, s_values, claim_amount, claim_distribution_name, claim_params,
+                            severity_distribution_name, severity_params):
+    '''
+    Generalized Panjer recursion for upper and lower bounds using dictionaries.
+    Computes both PDF and CDF values.
+
+    :param a: Panjer distribution parameter a
+    :param b: Panjer distribution parameter b
+    :param s_values: Array or list of s_values to compute
+    :param claim_amount: Claim amount for density calculation
+    :param claim_distribution_name: Distribution name for claims
+    :param claim_params: Parameters for the claim distribution
+    :param severity_distribution_name: Severity distribution name
+    :param severity_params: Parameters for the severity distribution
+    :return: Dictionary of s_values with corresponding PDF and CDF values
+    '''
+
+    s_values = np.array(s_values)
+    step_size = s_values[1] - s_values[0]
+
+    # Precompute the f values based on severity_distribution_name
+    def compute_f_values(s_values, step_size, severity_distribution_name, severity_params):
+        if severity_distribution_name == 'Weibull':
+            lambda_, k = severity_params
+            f_values = weibull_cdf(s_values + step_size, lambda_, k) - weibull_cdf(s_values, lambda_, k)
+
+        elif severity_distribution_name == 'Frechet':
+            alpha, beta, min_val = severity_params
+            f_values = frechet_cdf(s_values + step_size, alpha, beta, min_val) - frechet_pdf(s_values, alpha, beta,
+                                                                                             min_val)
+
+        elif severity_distribution_name == 'Pareto':
+            alpha, xm = severity_params
+            f_values = pareto_cdf(s_values + step_size, alpha, xm) - pareto_cdf(s_values, alpha, xm)
+
+        elif severity_distribution_name == 'Lognormal':
+            mu, sigma = severity_params
+            f_values = lognormal_cdf(s_values + step_size, mu, sigma) - lognormal_cdf(s_values, mu, sigma)
+
+        else:
+            raise ValueError("Invalid severity distribution name")
+
+        return f_values
+
+    f_values = compute_f_values(s_values, step_size, severity_distribution_name, severity_params)
+
+    # Initialize g values (PDF) and CDF
+    g = np.zeros_like(s_values)
+    g[0] = density(claim_amount)(0).evalf()  # Initial probability value for P(S=0)
+
+    # Vectorized Panjer recursion
+    for k in range(1, len(s_values)):
+        s = s_values[k]
+        k_index = np.searchsorted(s_values, s, side='left')
+        if k_index < len(s_values):
+            term_contributions = np.zeros(k_index)
+            for j in range(1, k_index + 1):
+                key = s - j * step_size
+                key_index = np.searchsorted(s_values, key, side='left')
+                if key_index < len(s_values) and np.isclose(s_values[key_index], key):
+                    term_contributions[j - 1] = (a + b * j / k) * g[key_index] * f_values[
+                        np.searchsorted(s_values, j * step_size, side='left')]
+
+            g[k_index] = np.sum(term_contributions)
+
+    # Compute CDF values by cumulative sum of PDF values
+    cdf = np.cumsum(g)
+
+    # Print debug information
+    print("PDF Values:")
+    for i, val in enumerate(g):
+        print(f"s={s_values[i]:.3f}, PDF={val:.5f}, CDF={cdf[i]:.5f}")
+
+    # Convert g and cdf to dictionary format
+    result_dict = {
+        s: {'pdf': g[i], 'cdf': cdf[i]} for i, s in enumerate(s_values)
+    }
+
+    return result_dict"""
+
 def first_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values):
     if severity_distribution_name == 'Weibull':
         lambda_, k = severity_params
