@@ -8,7 +8,30 @@ import io
 
 
 class PlottingWindow(tk.Toplevel):
+    """
+    A class that creates a plotting window with smaller plots on the left
+    and a larger plot on the right. Clicking on a smaller plot displays it
+    as a larger plot on the right.
+
+    Attributes:
+        left_frame (ttk.Frame): Frame to hold smaller plots.
+        right_frame (ttk.Frame): Frame to hold the large plot.
+        smaller_plots_canvas (tk.Canvas): Canvas to display smaller plots with a scrollbar.
+        scrollbar (ttk.Scrollbar): Vertical scrollbar for the smaller plots canvas.
+        smaller_plots_frame (ttk.Frame): Frame inside the canvas for the smaller plots.
+        large_plot_label (ttk.Label): Label to display the large plot.
+        plot_images (list): List to keep track of smaller plot images.
+        plot_map (dict): Dictionary to map plot indices to plot data.
+        current_plot_index (int): Index of the currently displayed large plot.
+        current_plot_title (str): Title of the currently displayed large plot.
+    """
     def __init__(self, parent):
+        """
+        Initialize the PlottingWindow class.
+
+        Args:
+            parent (tk.Widget): The parent widget.
+        """
         super().__init__(parent)
         self.title("Plotting Window")
         self.configure(bg='white')
@@ -50,15 +73,33 @@ class PlottingWindow(tk.Toplevel):
         self.current_plot_title = None  # To keep track of the current plot title
 
     def on_resize(self, event):
-        """Update scrollregion to match the canvas contents."""
+        """
+        Update the scrollregion to match the canvas contents.
+
+        Args:
+            event (tk.Event): The event object containing event data.
+        """
         self.smaller_plots_canvas.config(scrollregion=self.smaller_plots_canvas.bbox("all"))
 
     def update_window_size(self, width, height):
-        """Set the size of the window dynamically."""
+        """
+        Set the size of the window dynamically.
+
+        Args:
+            width (int): The desired width of the window.
+            height (int): The desired height of the window.
+        """
         self.geometry(f"{width}x{height}")
 
     def add_smaller_plot(self, s_values, *results, title):
-        """Add a smaller plot to the left frame with a given title."""
+        """
+        Add a smaller plot to the left frame with a given title.
+
+        Args:
+            s_values (list): The x-values for the plot.
+            *results (tuple): The y-values for multiple plot lines.
+            title (str): The title of the plot.
+        """
         fig, ax = plt.subplots(figsize=(3, 2))  # Smaller size for smaller plots
         for i, result in enumerate(results, start=1):
             if result is not None:
@@ -98,7 +139,14 @@ class PlottingWindow(tk.Toplevel):
         plt.close(fig)
 
     def show_large_plot(self, s_values, *results, title):
-        """Display the large plot in the right frame with a given title."""
+        """
+        Display the large plot in the right frame with a given title.
+
+        Args:
+            s_values (list): The x-values for the plot.
+            *results (tuple): The y-values for multiple plot lines.
+            title (str): The title of the plot.
+        """
         fig, ax = plt.subplots(figsize=(8, 6))
 
         for i, result in enumerate(results, start=1):
@@ -129,7 +177,13 @@ class PlottingWindow(tk.Toplevel):
         plt.close(fig)
 
     def on_plot_click(self, index):
-        """Handle clicks on smaller plots to show the corresponding large plot and swap the large plot back to small."""
+        """
+        Handle clicks on smaller plots to show the corresponding large plot
+        and swap the large plot back to small.
+
+        Args:
+            index (int): The index of the clicked plot.
+        """
         if index in self.plot_map:
             # Get the currently clicked plot's data
             clicked_plot_data = self.plot_map[index]
@@ -145,7 +199,45 @@ class PlottingWindow(tk.Toplevel):
 
 
 class DistributionCalculator(tk.Tk):
+    """
+    A Tkinter application for calculating and visualizing distributions.
+
+    This class sets up a GUI for selecting claims and severity distributions,
+    entering their parameters, and performing calculations based on the selected distributions.
+    It also provides functionality to plot the results of these calculations.
+
+    Attributes:
+        claims_distribution_var (tk.StringVar): A Tkinter variable to hold the selected claims distribution.
+        severity_distribution_var (tk.StringVar): A Tkinter variable to hold the selected severity distribution.
+        claims_parameters (dict): Dictionary to hold the input fields for claims distribution parameters.
+        severity_parameters (dict): Dictionary to hold the input fields for severity distribution parameters.
+        claims_distributions (dict): Dictionary mapping claims distribution names to their corresponding identifiers.
+        severity_distributions (dict): Dictionary mapping severity distribution names to their corresponding identifiers.
+        pdf_formulas (dict): Dictionary mapping distribution names to their corresponding LaTeX PDF formulas.
+        plotting_window (PlottingWindow, optional): Reference to an instance of the PlottingWindow class for plotting results.
+
+    Methods:
+        __init__: Initializes the main application window and sets up the user interface.
+        setup_ui: Configures the user interface components including frames, labels, combo boxes, and buttons.
+        generate_claims_parameter_inputs: Creates input fields for claims distribution parameters based on the selected distribution.
+        generate_severity_parameter_inputs: Creates input fields for severity distribution parameters based on the selected distribution.
+        validate_weibull_k: Validates the 'k' parameter for the Weibull distribution.
+        validate_strictly_positive: Ensures the value of a parameter is strictly positive.
+        validate_integer_positive: Ensures the value of a parameter is a positive integer.
+        validate_probability: Ensures the value of a parameter is a probability between 0 and 1 (inclusive).
+        update_calculate_button_state: Enables or disables the calculate button based on the validity of input fields.
+        update_claims_pdf_formula: Updates the claims PDF formula label with the formula corresponding to the selected distribution.
+        update_severity_pdf_formula: Updates the severity PDF formula label with the formula corresponding to the selected distribution.
+        display_latex_formula: Renders and displays a LaTeX formula using matplotlib in a Tkinter label.
+        calculate: Performs calculations based on the selected distributions and their parameters, and then opens or updates the plotting window with the results.
+        count_sign_changes: Counts the number of sign changes in a result array.
+        plot_results: Opens or updates the plotting window with new results and titles, checking for missing or oscillatory higher-order approximations.
+    """
     def __init__(self):
+        """
+        Initialize the Distribution Calculator application.
+        Sets up the main window, distribution choices, and UI components.
+        """
         super().__init__()
         self.title("Distribution Calculator")
 
@@ -190,6 +282,10 @@ class DistributionCalculator(tk.Tk):
         self.setup_ui()
 
     def setup_ui(self):
+        """
+        Set up the user interface components for the application.
+        Creates frames for claims and severity distributions, and adds labels, combo boxes, and buttons.
+        """
         # Left side - Claims Distribution
         claims_frame = ttk.Frame(self)
         claims_frame.grid(row=0, column=0, padx=10, pady=5)
@@ -241,6 +337,12 @@ class DistributionCalculator(tk.Tk):
         self.plot_label.pack()
 
     def generate_claims_parameter_inputs(self, event=None):
+        """
+        Generate input fields for claims distribution parameters based on the selected distribution.
+
+        Args:
+            event (tk.Event, optional): The event that triggered this method.
+        """
         # Remove previous parameter frame
         if hasattr(self, "claims_parameter_frame"):
             self.claims_parameter_frame.destroy()
@@ -293,6 +395,12 @@ class DistributionCalculator(tk.Tk):
         self.update_claims_pdf_formula(claims_distribution_name)
 
     def generate_severity_parameter_inputs(self, event=None):
+        """
+        Generate input fields for severity distribution parameters based on the selected distribution.
+
+        Args:
+            event (tk.Event, optional): The event that triggered the function.
+        """
         # Remove previous parameter frame
         if hasattr(self, "severity_parameter_frame"):
             self.severity_parameter_frame.destroy()
@@ -305,6 +413,7 @@ class DistributionCalculator(tk.Tk):
 
         self.severity_parameters = {}
 
+        # Define parameter names based on selected distribution
         if severity_distribution_name == "Lognormal":
             param_names = ["μ (Mu)", "σ (Sigma)"]
         elif severity_distribution_name == "Weibull":
@@ -316,12 +425,14 @@ class DistributionCalculator(tk.Tk):
         else:
             return
 
+        # Create and place input fields for each parameter
         for i, param_name in enumerate(param_names):
             param_label = ttk.Label(self.severity_parameter_frame, text=param_name)
             param_label.grid(row=i, column=0, padx=10, pady=5, sticky="w")
 
             param_entry = ttk.Entry(self.severity_parameter_frame)
 
+            # Bind validation functions based on the parameter and distribution
             if severity_distribution_name == "Weibull":
                 if param_name == "k (Shape)":
                     param_entry.bind("<FocusOut>", self.validate_weibull_k)
@@ -343,10 +454,18 @@ class DistributionCalculator(tk.Tk):
             param_entry.grid(row=i, column=1, padx=10, pady=5)
             self.severity_parameters[param_name] = param_entry
 
+        # Update the PDF formula for the selected severity distribution
         self.update_severity_pdf_formula(severity_distribution_name)
 
     def validate_weibull_k(self, event):
-        """Validation function to ensure k < 1 for Weibull distribution."""
+        """
+        Validate the 'k' parameter for the Weibull distribution.
+
+        Ensures that 'k' is between 0 and 1.
+
+        Args:
+            event (tk.Event): The event that triggered the validation.
+        """
         entry = event.widget
         input_value = entry.get()
         try:
@@ -365,7 +484,13 @@ class DistributionCalculator(tk.Tk):
             return False
 
     def validate_strictly_positive(self, event, param_name=""):
-        """Ensure the value is strictly positive."""
+        """
+        Ensure the value is strictly positive.
+
+        Args:
+            event (tk.Event): The event that triggered the validation.
+            param_name (str): The name of the parameter being validated (for error messages).
+        """
         entry = event.widget
         input_value = entry.get()
 
@@ -384,7 +509,12 @@ class DistributionCalculator(tk.Tk):
             return False
 
     def validate_integer_positive(self, event):
-        """Ensure the value is a positive integer."""
+        """
+        Ensure the value is a positive integer.
+
+        Args:
+            event (tk.Event): The event that triggered the validation.
+        """
         entry = event.widget
         input_value = entry.get()
 
@@ -403,7 +533,12 @@ class DistributionCalculator(tk.Tk):
             return False
 
     def validate_probability(self, event):
-        """Ensure the value is a probability between 0 and 1 (inclusive)."""
+        """
+        Ensure the value is a probability between 0 and 1 (inclusive).
+
+        Args:
+            event (tk.Event): The event that triggered the validation.
+        """
         entry = event.widget
         input_value = entry.get()
 
@@ -422,7 +557,10 @@ class DistributionCalculator(tk.Tk):
             return False
 
     def update_calculate_button_state(self):
-        """Enable or disable the calculate button based on input validity."""
+        """
+        Enable or disable the calculate button based on the validity of input fields.
+        The button is enabled if all parameter fields are filled; otherwise, it is disabled.
+        """
         valid = True
         for param_entry in list(self.claims_parameters.values()) + list(self.severity_parameters.values()):
             if param_entry.get().strip() == "":
@@ -432,17 +570,33 @@ class DistributionCalculator(tk.Tk):
         self.calculate_button.config(state=tk.NORMAL if valid else tk.DISABLED)
 
     def update_claims_pdf_formula(self, distribution_name):
-        """Update the label with the claims PDF formula in LaTeX format."""
+        """
+        Update the label with the claims PDF formula in LaTeX format based on the selected distribution.
+
+        Args:
+            distribution_name (str): The name of the selected claims distribution.
+        """
         formula = self.pdf_formulas.get(distribution_name, "")
         self.display_latex_formula(formula, self.claims_pdf_formula_label)
 
     def update_severity_pdf_formula(self, distribution_name):
-        """Update the label with the severity PDF formula in LaTeX format."""
+        """
+        Update the label with the severity PDF formula in LaTeX format based on the selected distribution.
+
+        Args:
+            distribution_name (str): The name of the selected severity distribution.
+        """
         formula = self.pdf_formulas.get(distribution_name, "")
         self.display_latex_formula(formula, self.severity_pdf_formula_label)
 
     def display_latex_formula(self, formula, label):
-        """Render a LaTeX formula using matplotlib and display it in the given label."""
+        """
+        Render a LaTeX formula using matplotlib and display it in the given label.
+
+        Args:
+            formula (str): The LaTeX formula to render.
+            label (tk.Label): The label where the formula image will be displayed.
+        """
         fig, ax = plt.subplots(figsize=(4, 1))  # Adjust size as needed
         ax.text(0.5, 0.5, formula, size=16, ha='center', va='center')  # Reduced font size
         ax.axis('off')
@@ -461,6 +615,12 @@ class DistributionCalculator(tk.Tk):
         label.image = photo  # Keep a reference to avoid garbage collection
 
     def calculate(self):
+        """
+        Calls on the approxiamtions/py file to perform calculations
+        based on the selected distributions and parameters, and calls the PlottingWindow class to plot the results.
+
+        Ensures that both distributions are selected and all parameters are filled before performing calculations.
+        """
         claims_distribution_name = self.claims_distribution_var.get()
         severity_distribution_name = self.severity_distribution_var.get()
 
@@ -506,7 +666,15 @@ class DistributionCalculator(tk.Tk):
         )
 
     def count_sign_changes(self, result):
-        """Count the number of times the sign changes in the result."""
+        """
+        Count the number of times the sign changes in the result array.
+
+        Args:
+            result (np.ndarray or list): The result array where sign changes are to be counted.
+
+        Returns:
+            int: The number of sign changes in the result array.
+        """
         if result is None or len(result) < 2:
             return 0
 
@@ -522,7 +690,17 @@ class DistributionCalculator(tk.Tk):
         return sign_changes
 
     def plot_results(self, s_values, claims_dist_name, claims_params, severity_dist_name, severity_params, *results):
-        """Open or update the plotting window with new results and titles."""
+        """
+        Open or update the plotting window with new results and titles.
+
+        Args:
+            s_values (np.ndarray or list): The x-values for the plots.
+            claims_dist_name (str): The name of the claims distribution.
+            claims_params (list of float): Parameters for the claims distribution.
+            severity_dist_name (str): The name of the severity distribution.
+            severity_params (list of float): Parameters for the severity distribution.
+            *results (list of np.ndarray or list): The results to plot.
+        """
         if not self.plotting_window:
             self.plotting_window = PlottingWindow(self)
 
