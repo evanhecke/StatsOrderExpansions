@@ -436,7 +436,7 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     else:
         s_min = 1 + epsilon
     s_max = 100001
-    num_points = 100001  # Number of points to plot
+    num_points = 10001  # Number of points to plot
     s_values = np.linspace(s_min, s_max, num_points)
 
     # Initialize distributions
