@@ -9,10 +9,28 @@ from sympy.stats import (Poisson, Binomial, NegativeBinomial, LogNormal,
                          Weibull, Frechet, Pareto, E, cdf, sample, density)
 
 def calculate_exp_frechet(severity_params):
+    """
+    Calculate the expected value of a Frechet distribution.
+
+    Args:
+        severity_params (tuple of float): Parameters for the Frechet distribution (alpha, beta, min_val).
+
+    Returns:
+        float: Expected value of the Frechet distribution.
+    """
     alpha, beta, min_val = severity_params
 
     # Use scipy to evaluate expected value numerically
     def integrand(x):
+        """
+        Integrand function for numerical integration.
+
+        Args:
+            x (float): The value at which to evaluate the integrand.
+
+        Returns:
+            float: Value of the integrand at x.
+        """
         return x * frechet_pdf(x, alpha, beta, min_val)
 
     exp_X, _ = quad(integrand, min_val, np.inf)
@@ -20,8 +38,20 @@ def calculate_exp_frechet(severity_params):
     return exp_X
 
 def initialize_distributions(claims_distribution_name, claims_params, severity_distribution_name, severity_params):
-    # Initialize the claim amount distribution
-    # And define the a and b values from the a,b,0-class
+    """
+    Initialize the distributions based on names and parameters.
+
+    Args:
+        claims_distribution_name (str): Name of the claims distribution ('Poisson', 'Binomial', 'Negative Binomial').
+        claims_params (tuple of float): Parameters for the claims distribution.
+        severity_distribution_name (str): Name of the severity distribution ('Lognormal', 'Weibull', 'Frechet', 'Pareto').
+        severity_params (tuple of float): Parameters for the severity distribution.
+
+    Returns:
+        tuple: Contains initialized distributions and parameters (N, X, exp_X, a, b).
+    """
+
+    # Define the a and b values from the a,b,0-class
     if claims_distribution_name == 'Poisson':
         lambda_ = claims_params[0]
         N = Poisson('N', lambda_)
@@ -77,41 +107,123 @@ def initialize_distributions(claims_distribution_name, claims_params, severity_d
 
 @jit
 def frechet_pdf(y, alpha, beta, min_val):
-    """Custom PDF for the Frechet distribution."""
+    """
+    Custom PDF for the Frechet distribution.
+
+    Args:
+        y (float): Value to compute the PDF for.
+        alpha (float): Shape parameter for the Frechet distribution.
+        beta (float): Scale parameter for the Frechet distribution.
+        min_val (float): Minimum value for the Frechet distribution.
+
+    Returns:
+        float: PDF value at y.
+    """
     return (alpha / beta) * ((y - min_val) / beta) ** (-1 - alpha) * np.exp(-((y - min_val) / beta) ** (-alpha))
 
 @jit
 def frechet_cdf(y, alpha, beta, min_val):
-    """Custom CDF for the Frechet distribution."""
+    """
+    Custom CDF for the Frechet distribution.
+
+    Args:
+        y (float): Value to compute the CDF for.
+        alpha (float): Shape parameter for the Frechet distribution.
+        beta (float): Scale parameter for the Frechet distribution.
+        min_val (float): Minimum value for the Frechet distribution.
+
+    Returns:
+        float: CDF value at y.
+    """
     return np.exp(-((y - min_val) / beta) ** (-alpha))
 
 @jit
 def weibull_pdf(s, lambda_, k):
-    """Custom PDF for the Weibull distribution."""
+    """
+    Custom PDF for the Weibull distribution.
+
+    Args:
+        s (float): Value to compute the PDF for.
+        lambda_ (float): Scale parameter for the Weibull distribution.
+        k (float): Shape parameter for the Weibull distribution.
+
+    Returns:
+        float: PDF value at s.
+    """
     return (k / lambda_) * (s / lambda_) ** (k - 1) * np.exp(-(s / lambda_) ** k)
 
 @jit
 def weibull_cdf(s, lambda_, k):
-    """Custom CDF calculation for the Weibull distribution."""
+    """
+    Custom CDF calculation for the Weibull distribution.
+
+    Args:
+        s (float): Value to compute the CDF for.
+        lambda_ (float): Scale parameter for the Weibull distribution.
+        k (float): Shape parameter for the Weibull distribution.
+
+    Returns:
+        float: CDF value at s.
+    """
     return 1 - np.exp(-(s / lambda_) ** k)
 
 @jit
 def pareto_pdf(s, alpha, xm):
-    """Custom PDF for the Pareto distribution."""
+    """
+    Custom PDF for the Pareto distribution.
+
+    Args:
+        s (float): Value to compute the PDF for.
+        alpha (float): Shape parameter for the Pareto distribution.
+        xm (float): Scale parameter for the Pareto distribution.
+
+    Returns:
+        float: PDF value at s.
+    """
     return (alpha * xm ** alpha) / s ** (alpha + 1)
 @jit
 def pareto_cdf(s, alpha, xm):
-    """Custom CDF calculation for the Pareto distribution."""
+    """
+    Custom CDF calculation for the Pareto distribution.
+
+    Args:
+        s (float): Value to compute the CDF for.
+        alpha (float): Shape parameter for the Pareto distribution.
+        xm (float): Scale parameter for the Pareto distribution.
+
+    Returns:
+        float: CDF value at s.
+    """
     return 1 - (xm / s) ** alpha
 
 @jit
 def lognormal_pdf(s, mu, sigma):
-    """Custom PDF for the Lognormal distribution."""
+    """
+    Custom PDF for the Lognormal distribution.
+
+    Args:
+        s (float): Value to compute the PDF for.
+        mu (float): Mean of the underlying normal distribution.
+        sigma (float): Standard deviation of the underlying normal distribution.
+
+    Returns:
+        float: PDF value at s.
+    """
     return (1 / (s * sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((np.log(s) - mu) / sigma) ** 2)
 
 # No @jit decorator here, because norm is not supported by Numba
 def lognormal_cdf(s, mu, sigma):
-    """Custom CDF for the Lognormal distribution."""
+    """
+    Custom CDF for the Lognormal distribution.
+
+    Args:
+        s (float): Value to compute the CDF for.
+        mu (float): Mean of the underlying normal distribution.
+        sigma (float): Standard deviation of the underlying normal distribution.
+
+    Returns:
+        float: CDF value at s.
+    """
     return norm.cdf((np.log(s) - mu) / sigma)
 
 """
@@ -196,6 +308,19 @@ def panjer_recursion_bounds(a, b, s_values, claim_amount, claim_distribution_nam
     return result_dict"""
 
 def first_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values):
+    """
+    Calculate the first-order approximation for the given parameters.
+
+    Args:
+        amount (Distribution): The claim amount distribution.
+        severity (Distribution): The severity distribution.
+        severity_distribution_name (str): The name of the severity distribution ('Weibull', 'Frechet', 'Pareto', 'Lognormal').
+        severity_params (tuple): Parameters for the severity distribution.
+        s_values (np.ndarray or list): The s-values for which to compute the approximation.
+
+    Returns:
+        np.ndarray: The first-order approximation results.
+    """
     if severity_distribution_name == 'Weibull':
         lambda_, k = severity_params
         tailX = 1 - weibull_cdf(s_values, lambda_, k)
@@ -218,6 +343,21 @@ def first_Order_Approximation(amount, severity, severity_distribution_name, seve
 
 
 def second_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
+    """
+    Calculate the second-order approximation for the given parameters.
+
+    Args:
+        amount (Distribution): The claim amount distribution.
+        severity (Distribution): The severity distribution.
+        severity_distribution_name (str): The name of the severity distribution ('Frechet', 'Pareto', 'Lognormal', 'Weibull').
+        severity_params (tuple): Parameters for the severity distribution.
+        s_values (np.ndarray or list): The s-values for which to compute the approximation.
+        results1 (np.ndarray): Results from the first-order approximation.
+        exp_X (float): Expected value of the severity distribution.
+
+    Returns:
+        np.ndarray: The second-order approximation results.
+    """
     exp_comb = E(amount * (amount - 1)).evalf()
 
     if severity_distribution_name == "Frechet":
@@ -253,12 +393,37 @@ def second_Order_Approximation(amount, severity, severity_distribution_name, sev
 
     return results1 + results2
 
-# Define a function to compute the numerical derivative using finite differences
 def numerical_derivative(f, x, *params, epsilon=1e-5):
+    """
+    Compute the numerical derivative of a function using finite differences.
+
+    Args:
+        f (callable): The function for which to compute the derivative.
+        x (float): The point at which to compute the derivative.
+        *params: Parameters to pass to the function f.
+        epsilon (float): The finite difference step size.
+
+    Returns:
+        float: The numerical derivative at x.
+    """
     return (f(x + epsilon, *params) - f(x - epsilon, *params)) / (2 * epsilon)
 def third_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
-    # Parameters
-    j = 1  # Example value for j, adjust as needed
+    """
+    Calculate the third-order approximation for the given parameters.
+
+    Args:
+        amount (Distribution): The claim amount distribution.
+        severity (Distribution): The severity distribution.
+        severity_distribution_name (str): The name of the severity distribution ('Weibull', 'Frechet', 'Pareto', 'Lognormal').
+        severity_params (tuple): Parameters for the severity distribution.
+        s_values (np.ndarray or list): The s-values for which to compute the approximation.
+        results1 (np.ndarray): Results from the first-order approximation.
+        exp_X (float): Expected value of the severity distribution.
+
+    Returns:
+        np.ndarray: The third-order approximation results.
+    """
+    j = 1
     N_samples = 100  # Number of samples for Monte Carlo simulation
 
     # Monte Carlo simulation
@@ -304,12 +469,37 @@ def third_Order_Approximation(amount, severity, severity_distribution_name, seve
     return (diffX * expected_value * 1/2)
 
 def numerical_second_derivative(f, x, *params, epsilon=1e-5):
-    """Compute the second derivative of f at x with parameters *params."""
+    """
+    Compute the second derivative of a function using finite differences.
+
+    Args:
+        f (callable): The function for which to compute the second derivative.
+        x (float): The point at which to compute the derivative.
+        *params: Parameters to pass to the function f.
+        epsilon (float): The finite difference step size.
+
+    Returns:
+        float: The second derivative at x.
+    """
     return (numerical_derivative(f, x + epsilon, *params) - numerical_derivative(f, x - epsilon, *params)) / (2 * epsilon)
 
 def fourth_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
-    # Parameters
-    j = 2  # Example value for j, adjust as needed
+    """
+    Calculate the fourth-order approximation for the given parameters.
+
+    Args:
+        amount (Distribution): The claim amount distribution.
+        severity (Distribution): The severity distribution.
+        severity_distribution_name (str): The name of the severity distribution ('Weibull', 'Frechet', 'Pareto', 'Lognormal').
+        severity_params (tuple): Parameters for the severity distribution.
+        s_values (np.ndarray or list): The s-values for which to compute the approximation.
+        results1 (np.ndarray): Results from the first-order approximation.
+        exp_X (float): Expected value of the severity distribution.
+
+    Returns:
+        np.ndarray: The fourth-order approximation results.
+    """
+    j = 2
     N_samples = 100  # Number of samples for Monte Carlo simulation
 
     # Monte Carlo simulation
@@ -345,12 +535,37 @@ def fourth_Order_Approximation(amount, severity, severity_distribution_name, sev
 
 
 def numerical_third_derivative(f, x, *params, epsilon=1e-2):
-    """Compute the third derivative of f at x with parameters *params."""
+    """
+    Compute the third derivative of a function using finite differences.
+
+    Args:
+        f (callable): The function for which to compute the third derivative.
+        x (float): The point at which to compute the derivative.
+        *params: Parameters to pass to the function f.
+        epsilon (float): The finite difference step size.
+
+    Returns:
+        float: The third derivative at x.
+    """
     return (numerical_second_derivative(f, x + epsilon, *params) - numerical_second_derivative(f, x - epsilon, *params)) / (2 * epsilon)
 
 def fifth_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
-    # Parameters
-    j = 3  # Example value for j, adjust as needed
+    """
+    Calculate the fifth-order approximation for the given parameters.
+
+    Args:
+        amount (Distribution): The claim amount distribution.
+        severity (Distribution): The severity distribution.
+        severity_distribution_name (str): The name of the severity distribution ('Weibull', 'Frechet', 'Pareto', 'Lognormal').
+        severity_params (tuple): Parameters for the severity distribution.
+        s_values (np.ndarray or list): The s-values for which to compute the approximation.
+        results1 (np.ndarray): Results from the first-order approximation.
+        exp_X (float): Expected value of the severity distribution.
+
+    Returns:
+        np.ndarray: The fifth-order approximation results.
+    """
+    j = 3
     N_samples = 100  # Number of samples for Monte Carlo simulation
 
     # Monte Carlo simulation
@@ -385,12 +600,37 @@ def fifth_Order_Approximation(amount, severity, severity_distribution_name, seve
     return (diffX * expected_value)
 
 def numerical_fourth_derivative(f, x, *params, epsilon=1e-2):
-    """Compute the fourth derivative of f at x with parameters *params."""
+    """
+    Compute the fourth derivative of a function using finite differences.
+
+    Args:
+        f (callable): The function for which to compute the fourth derivative.
+        x (float): The point at which to compute the derivative.
+        *params: Parameters to pass to the function f.
+        epsilon (float): The finite difference step size.
+
+    Returns:
+        float: The fourth derivative at x.
+    """
     return (numerical_third_derivative(f, x + epsilon, *params) - numerical_third_derivative(f, x - epsilon, *params)) / (2 * epsilon)
 
 def sixth_Order_Approximation(amount, severity, severity_distribution_name, severity_params, s_values, results1, exp_X):
-    # Parameters
-    j = 4  # Example value for j, adjust as needed
+    """
+    Calculate the sixth-order approximation for the given parameters.
+
+    Args:
+        amount (Distribution): The claim amount distribution.
+        severity (Distribution): The severity distribution.
+        severity_distribution_name (str): The name of the severity distribution ('Weibull', 'Frechet', 'Pareto', 'Lognormal').
+        severity_params (tuple): Parameters for the severity distribution.
+        s_values (np.ndarray or list): The s-values for which to compute the approximation.
+        results1 (np.ndarray): Results from the first-order approximation.
+        exp_X (float): Expected value of the severity distribution.
+
+    Returns:
+        np.ndarray: The sixth-order approximation results.
+    """
+    j = 4
     N_samples = 100  # Number of samples for Monte Carlo simulation
 
     # Monte Carlo simulation
@@ -426,6 +666,26 @@ def sixth_Order_Approximation(amount, severity, severity_distribution_name, seve
 
 
 def doCalculations(claims_distribution_name, claims_params, severity_distribution_name, severity_params):
+    """
+    Perform calculations for different orders of approximation based on the given parameters.
+
+    Args:
+        claims_distribution_name (str): The name of the claims distribution.
+        claims_params (tuple): Parameters for the claims distribution.
+        severity_distribution_name (str): The name of the severity distribution ('Weibull', 'Frechet', 'Pareto', 'Lognormal').
+        severity_params (tuple): Parameters for the severity distribution.
+
+    Returns:
+        tuple: (s_values, results1, results2, final_results3, final_results4, final_results5, final_results6)
+               Where:
+               - s_values: The range of s-values used for the calculations.
+               - results1: The first-order approximation results.
+               - results2: The second-order approximation results.
+               - final_results3: The third-order approximation results (or None if not computed).
+               - final_results4: The fourth-order approximation results (or None if not computed).
+               - final_results5: The fifth-order approximation results (or None if not computed).
+               - final_results6: The sixth-order approximation results (or None if not computed).
+    """
     # Define range of s values
     # Add Epsilon to prevent division by zero in the exponent
     epsilon = 1e-10
@@ -436,7 +696,7 @@ def doCalculations(claims_distribution_name, claims_params, severity_distributio
     else:
         s_min = 1 + epsilon
     s_max = 100001
-    num_points = 10001  # Number of points to plot
+    num_points = 100001  # Number of points to plot
     s_values = np.linspace(s_min, s_max, num_points)
 
     # Initialize distributions
