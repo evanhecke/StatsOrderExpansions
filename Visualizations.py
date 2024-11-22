@@ -14,6 +14,51 @@ print(model_metadata_df.dtypes)
 print(model_metadata_df['feature_importance'].head())  # Display the first few entries
 print(model_metadata_df['feature_names'].head())  # Display the first few entries
 
+def clean_malformed_data(data):
+    if not isinstance(data, str):
+        return data  # If it's already a valid object, return as-is
+    try:
+        # Replace multiple spaces with commas and clean brackets
+        data = data.replace(" ", ",").replace(",,", ",").strip("[]")
+        # Split into items and handle missing values by replacing them with 0
+        cleaned_data = [float(item) if item else 0 for item in data.split(",")]
+        return np.array(cleaned_data)  # Return as a numpy array
+    except Exception as e:
+        print(f"Error cleaning data: {data}, Error: {e}")
+        return np.array([])  # Return empty array on error
+
+# Clean 'confusionM' column
+model_metadata_df['confusionM_cleaned'] = model_metadata_df['confusionM'].apply(clean_malformed_data)
+
+# Clean 'feature_importance' column
+model_metadata_df['feature_importance_cleaned'] = model_metadata_df['feature_importance'].apply(clean_malformed_data)
+
+# Clean 'feature_names' column (special handling as it contains strings)
+def clean_feature_names(data):
+    if not isinstance(data, str):
+        return data  # If it's already valid, return as-is
+    try:
+        data = data.replace(" ", ",").replace(",,", ",").strip("[]")
+        return data.split(",")  # Return as a list of strings
+    except Exception as e:
+        print(f"Error cleaning feature names: {data}, Error: {e}")
+        return []
+
+model_metadata_df['feature_names_cleaned'] = model_metadata_df['feature_names'].apply(clean_feature_names)
+
+import seaborn as sns
+
+for index, row in model_metadata_df.iterrows():
+    feature_importance = row['feature_importance_cleaned']
+    feature_names = row['feature_names_cleaned']
+    if len(feature_importance) == len(feature_names):  # Ensure matching lengths
+        sns.barplot(x=feature_importance, y=feature_names, orient="h")
+        plt.title(f"Feature Importance - {row['model_name']}")
+        plt.xlabel("Importance")
+        plt.ylabel("Features")
+        plt.show()
+
+
 # Extract and plot loss curves for each model
 for index, row in model_metadata_df.iterrows():
     loss_values = eval(row['loss_values'])  # Convert string back to list
@@ -62,21 +107,39 @@ plt.legend(title="Models", bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.tight_layout()
 plt.show()
 
+from sklearn.metrics import ConfusionMatrixDisplay
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Function to clean and parse confusion matrix strings
+def clean_confusion_matrix_string(confusion_matrix_str):
+    if not isinstance(confusion_matrix_str, str):
+        return confusion_matrix_str  # If already a valid object, return as-is
+
+    # Remove extra spaces and commas
+    confusion_matrix_str = confusion_matrix_str.replace(" ", ",").replace(",,", ",")
+    # Remove any trailing commas in rows
+    confusion_matrix_str = confusion_matrix_str.strip("[]").split("],")
+    cleaned_rows = []
+    for row in confusion_matrix_str:
+        # Convert each row to a list of integers, replacing empty fields with 0
+        cleaned_row = [int(num) if num else 0 for num in row.replace("[", "").replace("]", "").split(",")]
+        cleaned_rows.append(cleaned_row)
+    return np.array(cleaned_rows)
 
 # Plot confusion matrices
 for index, row in model_metadata_df.iterrows():
-    # Check if confusionM is already a valid matrix format
     confusion_matrix = row['confusionM']
 
-    # If confusionM is stored as a string, safely convert it to a numpy array
-    if isinstance(confusion_matrix, str):
-        confusion_matrix = np.array(eval(confusion_matrix))  # Safely parse it to a numpy array
+    # Clean and convert confusionM string to a valid numpy array
+    confusion_matrix = clean_confusion_matrix_string(confusion_matrix)
 
     # Display the confusion matrix
     disp = ConfusionMatrixDisplay(confusion_matrix=confusion_matrix)
     disp.plot(cmap='Blues')
     plt.title(f"Confusion Matrix - {row['model_name']}")
     plt.show()
+
 
 # Select a single feature and compare it against accuracy
 feature_of_interest = "Feature 1"

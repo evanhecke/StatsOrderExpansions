@@ -385,10 +385,6 @@ model.compile(optimizer='adam', loss='poisson')
 # Train the model
 history = model.fit(X_train, y_train, epochs=Nepochs, batch_size=32, verbose=1, validation_split=0.2)
 
-# Evaluate the model on the test set
-loss = model.evaluate(X_test, y_test)
-print(f"Test Loss: {loss}")
-
 # Predict using the trained Keras model
 y_pred = np.round(model.predict(X_test).flatten())  # Flatten to convert predictions to 1D array
 
