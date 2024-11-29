@@ -18,10 +18,13 @@ print(model_metadata_df.dtypes)
 print(model_metadata_df['feature_importance'].head())  # Display the first few entries
 print(model_metadata_df['feature_names'].head())  # Display the first few entries
 
-# Extract and plot loss curves for each model
+## Extract and plot loss curves for each model
 for index, row in model_metadata_df.iterrows():
-    loss_values = eval(row['loss_values'])  # Convert string back to list
-    plt.plot(loss_values, label=row['model_name'])
+    loss_values = row['loss_values']  # Directly access the loss values
+    if isinstance(loss_values, str):  # If it's a string, convert it back to a list
+        loss_values = eval(loss_values)
+    if loss_values:  # Ensure loss_values is not None or empty
+        plt.plot(loss_values, label=row['model_name'])
 
 plt.title('Loss Over Epochs')
 plt.xlabel('Epochs')

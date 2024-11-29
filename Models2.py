@@ -27,6 +27,11 @@ import statsmodels.formula.api as smf
 import plotly.graph_objects as go
 from graphviz import Digraph
 from collections import Counter
+from sklearn.ensemble import BaggingClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
@@ -96,7 +101,7 @@ df = df.drop(columns=['expo'])
 df['province'] = df['postcode'].astype(str).str[0].astype(int)
 df = df.drop(columns=['postcode'])
 
-df_dummies = pd.get_dummies(df, columns=['coverage', 'sex', 'fuel', 'use', 'fleet'], drop_first=True)
+df_dummies = pd.get_dummies(df, columns=['coverage', 'sex', 'fuel', 'use', 'fleet','province','bm'], drop_first=False)
 
 print(df_dummies.head())
 print(df_dummies.columns)
@@ -125,21 +130,24 @@ columns = ["model_name", "history", "mse", "mae", "accuracy", "precision", "reca
 model_metadata_df = pd.DataFrame(columns=columns)
 
 # Function to automatically collect the metadata
-def collect_metadata(model_name, history, X_train, y_test, y_pred, learning_rate, training_duration):
+"""def collect_metadata(model_name, history, X_train, y_test, y_pred, learning_rate, training_duration):
     # Ensure X_train is a DataFrame or supply feature names
     if isinstance(X_train, np.ndarray):
         feature_names = [f"Feature {i + 1}" for i in range(X_train.shape[1])]
     else:
         feature_names = X_train.columns
 
-    # Get the weights of the first Dense layer
-    weights, biases = model.layers[0].get_weights()
+    if 'Bagging' in model_name or 'Random' in model_name:
+        feature_importance = np.zeros(len(X_train.columns))
+    else:
+        # Get the weights of the first Dense layer
+        weights, biases = model.layers[0].get_weights()
 
-    # Compute feature importance as the sum of absolute weights for each input feature
-    feature_importance = np.sum(np.abs(weights), axis=1)
+        # Compute feature importance as the sum of absolute weights for each input feature
+        feature_importance = np.sum(np.abs(weights), axis=1)
 
-    # Normalize for easier interpretation
-    feature_importance = feature_importance / np.sum(feature_importance)
+        # Normalize for easier interpretation
+        feature_importance = feature_importance / np.sum(feature_importance)
 
     metadata = {
         "model_name": model_name,
@@ -166,6 +174,58 @@ def collect_metadata(model_name, history, X_train, y_test, y_pred, learning_rate
         "batch_size": 32
     }
     return metadata
+"""
+
+def collect_metadata(model_name, history, X_train, y_test, y_pred, learning_rate=None, training_duration=None):
+    # Determine feature names
+    if isinstance(X_train, np.ndarray):
+        feature_names = [f"Feature {i + 1}" for i in range(X_train.shape[1])]
+    else:
+        feature_names = X_train.columns.tolist()
+
+    # Initialize feature importance
+    if 'Bagging' in model_name or 'Random' in model_name:
+        # Bagging and Random Forest: Use estimator's feature importance if available
+        if hasattr(model, "estimators_"):
+            # Average feature importances across all estimators
+            feature_importance = np.mean([tree.feature_importances_ for tree in model.estimators_], axis=0)
+        else:
+            feature_importance = np.zeros(len(feature_names))
+    elif 'NN' in model_name:
+        # Neural Network: Compute feature importance from weights of the first Dense layer
+        weights, biases = model.layers[0].get_weights()
+        feature_importance = np.sum(np.abs(weights), axis=1)
+        feature_importance = feature_importance / np.sum(feature_importance)  # Normalize
+    else:
+        # Default: Zero feature importance
+        feature_importance = np.zeros(len(feature_names))
+
+    # Initialize metadata dictionary
+    metadata = {
+        "model_name": model_name,
+        "mse": mean_squared_error(y_test, y_pred),
+        "mae": mean_absolute_error(y_test, y_pred),
+        "accuracy": accuracy_score(y_test, y_pred) if len(set(y_test)) > 1 else None,
+        "precision": precision_score(y_test, y_pred, average='weighted', zero_division=1) if len(set(y_test)) > 1 else None,
+        "recall": recall_score(y_test, y_pred, average='weighted', zero_division=1) if len(set(y_test)) > 1 else None,
+        "f1": f1_score(y_test, y_pred, average='weighted', zero_division=1) if len(set(y_test)) > 1 else None,
+        "confusionM": confusion_matrix(y_test, y_pred).tolist() if len(set(y_test)) > 1 else None,
+        "loss_values": history.history['loss'] if history and hasattr(history, 'history') else None,
+        "predictions": y_pred.tolist(),
+        "feature_names": feature_names,
+        "feature_importance": feature_importance.tolist(),
+        "learning_rate": learning_rate,
+        "epochs": len(history.epoch) if history and hasattr(history, 'epoch') else None,
+        "train_loss": history.history.get('loss', []) if history and hasattr(history, 'history') else None,
+        "val_loss": history.history.get('val_loss', []) if history and hasattr(history, 'history') else None,
+        "train_accuracy": history.history.get('accuracy', []) if history and hasattr(history, 'history') else None,
+        "val_accuracy": history.history.get('val_accuracy', []) if history and hasattr(history, 'history') else None,
+        "model_architecture": [(layer.name, layer.get_config()) for layer in model.layers] if hasattr(model, 'layers') else None,
+        "training_time": training_duration,
+        "batch_size": 32 if history and hasattr(history, 'epoch') else None,
+    }
+    return metadata
+
 
 # Our target variable y is Poisson distributed, so we hand build an adequate loss functions
 # for the statistical learning algorithms: Poisson NLL
@@ -256,7 +316,7 @@ df = df.drop(columns=['expo'])
 df['province'] = df['postcode'].astype(str).str[0].astype(int)
 df = df.drop(columns=['postcode'])
 
-df_dummies = pd.get_dummies(df, columns=['coverage', 'sex', 'fuel', 'use', 'fleet'], drop_first=True)
+df_dummies = pd.get_dummies(df, columns=['coverage', 'sex', 'fuel', 'use', 'fleet','province', 'bm'], drop_first=False)
 
 print(df_dummies)
 
@@ -301,9 +361,9 @@ y = df_dummies['nclaims']               # Target variable
 # Identify the numeric columns for scaling (excluding the ones that are now categorical after pd.get_dummies())
 numeric_cols = X.select_dtypes(include=['float64', 'int64']).columns.tolist()
 
-# Apply MinMaxScaler to the numeric columns
+"""# Apply MinMaxScaler to the numeric columns
 scaler = MinMaxScaler()
-X[numeric_cols] = scaler.fit_transform(X[numeric_cols])
+X[numeric_cols] = scaler.fit_transform(X[numeric_cols])"""
 
 # Split into training and test sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=30)
@@ -454,7 +514,65 @@ model_metadata_df = pd.concat([model_metadata_df, new_row_df], ignore_index=True
 
 print(model_metadata_df)
 
+#############################################################################################
+# MODEL6: BaggingTree, with categorical variables
+#############################################################################################
 
+# Create a Bagging Classifier
+model = BaggingClassifier(
+        estimator=DecisionTreeClassifier(),
+        n_estimators=15,
+        random_state=30,
+        n_jobs=-1)
+
+# Train the model
+training_start_time = time.time()
+# Train the model
+history = model.fit(X_train, y_train)
+training_end_time = time.time()
+training_duration = training_end_time - training_start_time
+# Predict using the trained Keras model
+y_pred = np.round(model.predict(X_test).flatten())  # Flatten to convert predictions to 1D array
+
+# Save the metadata into the dataframe
+new_metadata = collect_metadata(model_name="BaggingTreeCat", history=history, X_train=X_train, y_test=y_test, y_pred=y_pred,
+                                learning_rate=learning_rate, training_duration=training_duration)
+
+# Convert the dictionary to a DataFrame and concatenate
+new_row_df = pd.DataFrame([new_metadata])
+model_metadata_df = pd.concat([model_metadata_df, new_row_df], ignore_index=True)
+
+print(model_metadata_df)
+
+#############################################################################################
+# MODEL7: Random Forest, with categorical variables
+#############################################################################################
+
+
+# Create a Random Forest Classifier
+model = RandomForestClassifier(
+        n_estimators=15,
+        random_state=30,
+        n_jobs=-1)
+
+# Train the model
+training_start_time = time.time()
+# Train the model
+history = model.fit(X_train, y_train)
+training_end_time = time.time()
+training_duration = training_end_time - training_start_time
+# Predict using the trained Keras model
+y_pred = np.round(model.predict(X_test).flatten())  # Flatten to convert predictions to 1D array
+
+# Save the metadata into the dataframe
+new_metadata = collect_metadata(model_name="RandomForestCat", history=history, X_train=X_train, y_test=y_test, y_pred=y_pred,
+                                learning_rate=learning_rate, training_duration=training_duration)
+
+# Convert the dictionary to a DataFrame and concatenate
+new_row_df = pd.DataFrame([new_metadata])
+model_metadata_df = pd.concat([model_metadata_df, new_row_df], ignore_index=True)
+
+print(model_metadata_df)
 
 
 ######################################################################
