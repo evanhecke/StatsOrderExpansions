@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import time
 import seaborn as sns
 import matplotlib.pyplot as plt
 import time
@@ -24,7 +25,7 @@ columns = ["model_name", "history", "mse", "mae", "accuracy", "precision", "reca
 model_metadata_df = pd.DataFrame(columns=columns)
 
 # Function to automatically collect the metadata
-def collect_metadata(model_name, history, X_train, y_test, y_pred, learning_rate):
+def collect_metadata(model, model_name, history, X_train, y_test, y_pred, learning_rate, training_duration):
     # Ensure X_train is a DataFrame or supply feature names
     if isinstance(X_train, np.ndarray):
         feature_names = [f"Feature {i + 1}" for i in range(X_train.shape[1])]
@@ -49,13 +50,19 @@ def collect_metadata(model_name, history, X_train, y_test, y_pred, learning_rate
         "precision": precision_score(y_test, y_pred, average='weighted', zero_division=1),
         "recall": recall_score(y_test, y_pred, average='weighted', zero_division=1),
         "f1": f1_score(y_test, y_pred, average='weighted', zero_division=1),
-        "confusionM": confusion_matrix(y_test, y_pred),
+        "confusionM": confusion_matrix(y_test, y_pred).tolist(),
         "loss_values": history.history['loss'],
-        "predictions": y_pred,
-        "feature_names": feature_names,
-        "feature_importance": feature_importance,
+        "predictions": y_pred.tolist(),
+        "feature_names": feature_names.tolist(),
+        "feature_importance": feature_importance.tolist(),
         "learning_rate": learning_rate,
         "epochs": len(history.epoch),
+        "train_loss": history.history.get('loss', []),
+        "val_loss": history.history.get('val_loss', []),
+        "train_accuracy": history.history.get('accuracy', []),
+        "val_accuracy": history.history.get('val_accuracy', []),
+        "model_architecture": [(layer.name, layer.get_config()) for layer in model.layers],
+        "training_time": training_duration,
         "batch_size": 32
     }
     return metadata
@@ -87,7 +94,7 @@ df.to_pickle("dataset.pkl")
 df = pd.read_pickle("dataset.pkl")
 
 # Define the number of epochs (iterations) to run
-Nepochs = 30
+Nepochs = 10
 
 #############################################################################################
 # MODEL1: NN(15,25,10), with continuous variables
@@ -145,10 +152,14 @@ model.compile(optimizer=Adam(learning_rate=0.001),
               loss=poisson_nll)
 
 # Train the model
+training_start_time = time.time()
 history = model.fit(X_train, y_train,
           epochs=Nepochs,
           batch_size=32,
           verbose=1)
+
+training_end_time = time.time()
+training_duration = training_end_time - training_start_time
 
 # Retrieve the learning rate
 learning_rate = model.optimizer.learning_rate.numpy()
@@ -158,14 +169,8 @@ learning_rate = model.optimizer.learning_rate.numpy()
 y_pred = np.round(model.predict(X_test))
 
 # Save the metadata into the dataframe
-new_metadata = collect_metadata(
-    model_name="NN(15,20,10)Cont",
-    history=history,
-    X_train=X_train,
-    y_test=y_test,
-    y_pred=y_pred,
-    learning_rate=learning_rate
-)
+new_metadata = collect_metadata(model, model_name="NN(15,20,10)Cont", history=history, X_train=X_train, y_test=y_test,
+                                y_pred=y_pred, learning_rate=learning_rate, training_duration=training_duration)
 
 # Convert the dictionary to a DataFrame and concatenate
 new_row_df = pd.DataFrame([new_metadata])
@@ -262,24 +267,20 @@ model.compile(optimizer=Adam(learning_rate=0.001),  # Adam optimizer
               loss=poisson_nll)  # Use Poisson NLL loss
 
 # Train the model
+training_start_time = time.time()
 history = model.fit(X_train, y_train,
           epochs=Nepochs,  # Number of iterations
           batch_size=32,  # Default batch size
           verbose=1)  # Print progress during training
-
+training_end_time = time.time()
+training_duration = training_end_time - training_start_time
 # Evaluate the model
 # Predict on the test set
 y_pred = np.round(model.predict(X_test))
 
 # Save the metadata into the dataframe
-new_metadata = collect_metadata(
-    model_name="NN(15,20,10)Cat",
-    history=history,
-    X_train=X_train,
-    y_test=y_test,
-    y_pred=y_pred,
-    learning_rate=learning_rate
-)
+new_metadata = collect_metadata(model, model_name="NN(15,20,10)Cat", history=history, X_train=X_train, y_test=y_test,
+                                y_pred=y_pred, learning_rate=learning_rate, training_duration=training_duration)
 
 # Convert the dictionary to a DataFrame and concatenate
 new_row_df = pd.DataFrame([new_metadata])
@@ -303,24 +304,20 @@ model.compile(optimizer=Adam(learning_rate=0.001),  # Adam optimizer
               loss=poisson_nll)  # Use Poisson NLL loss
 
 # Train the model
+training_start_time = time.time()
 history = model.fit(X_train, y_train,
           epochs=Nepochs,  # Number of iterations
           batch_size=32,  # Default batch size
           verbose=1)  # Print progress during training
-
+training_end_time = time.time()
+training_duration = training_end_time - training_start_time
 # Evaluate the model
 # Predict on the test set
 y_pred = np.round(model.predict(X_test))
 
 # Save the metadata into the dataframe
-new_metadata = collect_metadata(
-    model_name="NN(100,200,75)Cat",
-    history=history,
-    X_train=X_train,
-    y_test=y_test,
-    y_pred=y_pred,
-    learning_rate=learning_rate
-)
+new_metadata = collect_metadata(model, model_name="NN(100,200,75)Cat", history=history, X_train=X_train, y_test=y_test,
+                                y_pred=y_pred, learning_rate=learning_rate, training_duration=training_duration)
 
 # Convert the dictionary to a DataFrame and concatenate
 new_row_df = pd.DataFrame([new_metadata])
@@ -344,24 +341,21 @@ model.compile(optimizer=Adam(learning_rate=0.001),  # Adam optimizer
               loss=poisson_nll)  # Use Poisson NLL loss
 
 # Train the model
+training_start_time = time.time()
 history = model.fit(X_train, y_train,
           epochs=Nepochs,  # Number of iterations
           batch_size=32,  # Default batch size
           verbose=1)  # Print progress during training
-
+training_end_time = time.time()
+training_duration = training_end_time - training_start_time
 # Evaluate the model
 # Predict on the test set
 y_pred = np.round(model.predict(X_test))
 
 # Save the metadata into the dataframe
-new_metadata = collect_metadata(
-    model_name="NN(500,1000,200)Cat",
-    history=history,
-    X_train=X_train,
-    y_test=y_test,
-    y_pred=y_pred,
-    learning_rate=learning_rate
-)
+new_metadata = collect_metadata(model, model_name="NN(500,1000,200)Cat", history=history, X_train=X_train,
+                                y_test=y_test, y_pred=y_pred, learning_rate=learning_rate,
+                                training_duration=training_duration)
 
 # Convert the dictionary to a DataFrame and concatenate
 new_row_df = pd.DataFrame([new_metadata])
@@ -383,20 +377,16 @@ model = Sequential([
 model.compile(optimizer='adam', loss='poisson')
 
 # Train the model
+training_start_time = time.time()
 history = model.fit(X_train, y_train, epochs=Nepochs, batch_size=32, verbose=1, validation_split=0.2)
-
+training_end_time = time.time()
+training_duration = training_end_time - training_start_time
 # Predict using the trained Keras model
 y_pred = np.round(model.predict(X_test).flatten())  # Flatten to convert predictions to 1D array
 
 # Save the metadata into the dataframe
-new_metadata = collect_metadata(
-    model_name="GLMCat",
-    history=history,
-    X_train=X_train,
-    y_test=y_test,
-    y_pred=y_pred,
-    learning_rate=learning_rate
-)
+new_metadata = collect_metadata(model, model_name="GLMCat", history=history, X_train=X_train, y_test=y_test,
+                                y_pred=y_pred, learning_rate=learning_rate, training_duration=training_duration)
 
 # Convert the dictionary to a DataFrame and concatenate
 new_row_df = pd.DataFrame([new_metadata])
