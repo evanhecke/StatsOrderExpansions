@@ -110,6 +110,8 @@ print(df_dummies.columns)
 X = df_dummies.drop(['claim', 'nclaims', 'amount', 'average', 'id'], axis=1)  # Features
 y = df_dummies['nclaims']               # Target variable
 
+print(len(y))
+
 # Preprocess numeric variables
 # Identify the numeric columns for scaling (excluding the ones that are now categorical after pd.get_dummies())
 numeric_cols = X.select_dtypes(include=['float64', 'int64']).columns.tolist()
@@ -360,6 +362,8 @@ y = df_dummies['nclaims']               # Target variable
 # Preprocess numeric variables
 # Identify the numeric columns for scaling (excluding the ones that are now categorical after pd.get_dummies())
 numeric_cols = X.select_dtypes(include=['float64', 'int64']).columns.tolist()
+
+print(X.columns)
 
 """# Apply MinMaxScaler to the numeric columns
 scaler = MinMaxScaler()
